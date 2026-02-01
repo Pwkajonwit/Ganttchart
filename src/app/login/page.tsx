@@ -145,6 +145,32 @@ export default function LoginPage() {
                         © 2026 SRT-HST Construction Management System
                     </p>
                 </div>
+                {/* Debug Tool (Dev Only) */}
+                <div className="fixed bottom-2 right-2 p-2">
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            try {
+                                const { getMembers, seedMembers } = await import('@/lib/firestore');
+                                const members = await getMembers();
+                                if (members.length === 0) {
+                                    if (confirm('ไม่พบข้อมูลสมาชิกในระบบ (0 คน)\nต้องการสร้างข้อมูลตัวอย่างหรือไม่? (Admin, Manager, Engineer)')) {
+                                        await seedMembers();
+                                        alert('สร้างข้อมูลตัวอย่างเรียบร้อย ลองเข้าสู่ระบบด้วย: admin@company.com');
+                                    }
+                                } else {
+                                    alert(`Project ID: ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}\n\nพบข้อมูลสมาชิก ${members.length} คน:\n\n${members.map(m => `- ${m.email} (${m.name})`).join('\n')}`);
+                                }
+                            } catch (e: any) {
+                                alert('เกิดข้อผิดพลาดในการดึงข้อมูล:\n' + e.message);
+                            }
+                        }}
+                        className="text-xs text-gray-300 hover:text-gray-500 transition-colors"
+                        title="Click to specific DB users"
+                    >
+                        Troubleshoot DB
+                    </button>
+                </div>
             </div>
         </div>
     );

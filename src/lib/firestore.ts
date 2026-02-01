@@ -516,7 +516,8 @@ export async function seedSampleData(): Promise<void> {
 
 export async function getMembers(): Promise<Member[]> {
     const membersRef = collection(db, 'members');
-    const q = query(membersRef, orderBy('createdAt', 'desc'));
+    // Removed orderBy to ensure we see ALL documents regardless of fields
+    const q = query(membersRef);
     const snapshot = await getDocs(q);
 
     return snapshot.docs.map(doc => ({
