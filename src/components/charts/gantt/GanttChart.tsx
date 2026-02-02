@@ -718,6 +718,7 @@ export default function GanttChart({
                                     timeRange={timeRange}
                                     stickyWidth={stickyWidth}
                                     onDeleteDependency={(taskId, predId) => onTaskUpdate?.(taskId, { predecessors: optimisticTasks.find(t => t.id === taskId)?.predecessors?.filter(p => p !== predId) })}
+                                    offsetY={36}
                                 />
                             )}
 
@@ -971,7 +972,7 @@ export default function GanttChart({
                                                                                 return (
                                                                                     <div key={subsub}>
                                                                                         {/* SubSub Header */}
-                                                                                        <div className="h-7 flex items-center bg-gray-50/20 border-b border-dotted border-gray-100 group" >
+                                                                                        <div className="h-8 flex items-center bg-gray-50/20 border-b border-dotted border-gray-100 group" >
                                                                                             <div className="sticky left-0 z-[59] flex items-center border-r border-gray-300 pl-2 bg-gray-50"
                                                                                                 style={{ width: stickyWidth, minWidth: stickyWidth, paddingLeft: 40 }}>
 
@@ -1030,7 +1031,7 @@ export default function GanttChart({
 
                                                                                                 {subsubDateRange && (
                                                                                                     <div
-                                                                                                        className="absolute h-2.5 top-[9px] rounded-full border border-gray-400/20"
+                                                                                                        className="absolute h-2.5 top-[11px] rounded-full border border-gray-400/20"
                                                                                                         style={{
                                                                                                             ...getCategoryBarStyle(subsubDateRange, viewMode, config, timeRange),
                                                                                                             backgroundColor: `${subColor}20`,

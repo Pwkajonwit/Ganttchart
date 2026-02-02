@@ -11,6 +11,7 @@ interface DependencyLinesProps {
     timeRange: { start: Date; end: Date };
     stickyWidth: number;
     onDeleteDependency: (taskId: string, predecessorId: string) => void;
+    offsetY?: number;
 }
 
 export const DependencyLines: React.FC<DependencyLinesProps> = ({
@@ -20,7 +21,8 @@ export const DependencyLines: React.FC<DependencyLinesProps> = ({
     viewMode,
     timeRange,
     stickyWidth,
-    onDeleteDependency
+    onDeleteDependency,
+    offsetY = 0
 }) => {
     const rowHeight = 32;
     const halfRow = rowHeight / 2;
@@ -49,9 +51,9 @@ export const DependencyLines: React.FC<DependencyLinesProps> = ({
                     };
 
                     const x1 = getX(predTask, 'end');
-                    const y1 = (sourceRowIndex * rowHeight) + halfRow;
+                    const y1 = offsetY + (sourceRowIndex * rowHeight) + halfRow;
                     const x2 = getX(task, 'start');
-                    const y2 = (targetRowIndex * rowHeight) + halfRow;
+                    const y2 = offsetY + (targetRowIndex * rowHeight) + halfRow;
 
                     // Clean Orthogonal Routing
                     let path = '';

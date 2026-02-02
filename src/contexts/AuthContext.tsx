@@ -36,19 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const login = async (email: string): Promise<{ success: boolean; message: string }> => {
         try {
-            const cleanEmail = email.trim().toLowerCase();
-            console.log('Login attempt for:', cleanEmail);
-
             // Fetch members from Firebase
             const members = await getMembers();
-            console.log('Available members in DB:', members.map(m => m.email));
 
-            // Find member by email (case-insensitive and trimmed)
-            const member = members.find(m => (m.email || '').trim().toLowerCase() === cleanEmail);
+            // Find member by email (case-insensitive)
+            const member = members.find(m => m.email.toLowerCase() === email.toLowerCase());
 
             if (!member) {
-                console.warn(`User ${cleanEmail} not found in member list.`);
-                return { success: false, message: `ไม่พบอีเมล "${cleanEmail}" ในระบบ (มีผู้ใช้งาน ${members.length} คน)` };
+                return { success: false, message: 'ไม่พบอีเมลนี้ในระบบ กรุณาติดต่อผู้ดูแลระบบ' };
             }
 
             // Store user in state and localStorage
@@ -58,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return { success: true, message: 'เข้าสู่ระบบสำเร็จ' };
         } catch (error) {
             console.error('Login error:', error);
-            return { success: false, message: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ: ' + (error instanceof Error ? error.message : String(error)) };
+            return { success: false, message: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' };
         }
     };
 
