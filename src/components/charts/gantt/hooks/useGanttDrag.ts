@@ -21,18 +21,26 @@ export function useGanttDrag({
     const [dragState, setDragState] = useState<DragState | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    // Global Mouse Event Listeners for Dragging
+    // Global Event Listeners for Dragging (Mouse & Touch)
     useEffect(() => {
         if (!dragState) return;
 
         // Prevent text selection during drag
         document.body.style.userSelect = 'none';
         document.body.style.cursor = 'grabbing';
+        document.body.style.touchAction = 'none'; // Prevent scrolling on touch
 
         let animationFrameId: number | null = null;
 
-        const handleMouseMove = (e: MouseEvent) => {
-            e.preventDefault();
+        const getClientX = (e: MouseEvent | TouchEvent) => {
+            if ('touches' in e) {
+                return e.touches[0].clientX;
+            }
+            return (e as MouseEvent).clientX;
+        };
+
+        const handleMove = (e: MouseEvent | TouchEvent) => {
+            const clientX = getClientX(e);
 
             // Throttle with requestAnimationFrame
             if (animationFrameId) return;
@@ -40,10 +48,9 @@ export function useGanttDrag({
             animationFrameId = requestAnimationFrame(() => {
                 animationFrameId = null;
 
-                const deltaX = e.clientX - dragState.startX;
+                const deltaX = clientX - dragState.startX;
                 let daysDelta = 0;
 
-                // Reuse logic conceptually similar to getCoordinateX but keeping simple delta calculation here for speed
                 if (viewMode === 'day') {
                     daysDelta = deltaX / config.cellWidth;
                 } else if (viewMode === 'week') {
@@ -75,10 +82,11 @@ export function useGanttDrag({
             });
         };
 
-        const handleMouseUp = async () => {
+        const handleUp = async () => {
             // Restore body styles
             document.body.style.userSelect = '';
             document.body.style.cursor = '';
+            document.body.style.touchAction = '';
 
             const hasMoved = dragState.currentStart?.getTime() !== dragState.originalStart.getTime() ||
                 dragState.currentEnd?.getTime() !== dragState.originalEnd.getTime();
@@ -87,16 +95,12 @@ export function useGanttDrag({
                 setIsUpdating(true);
 
                 try {
-                    const formatDate = (d: Date) => format(d, 'yyyy-MM-dd');
                     const currentStart = dragState.currentStart || dragState.originalStart;
                     const currentEnd = dragState.currentEnd || dragState.originalEnd;
 
-                    // Update based on which bar was being dragged
                     if (dragState.barType === 'actual') {
-                        // ... Actual Update Logic ...
                         await handleActualUpdate(dragState, tasksRef.current, currentStart, currentEnd, setOptimisticTasks, onTaskUpdate);
                     } else {
-                        // ... Plan Update Logic ...
                         await handlePlanUpdate(dragState, tasksRef.current, currentStart, currentEnd, setOptimisticTasks, onTaskUpdate);
                     }
                 } catch (error) {
@@ -110,22 +114,36 @@ export function useGanttDrag({
             }
         };
 
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleUp);
 
         return () => {
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
             }
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleUp);
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleUp);
         };
     }, [dragState, viewMode, config.cellWidth, onTaskUpdate, tasksRef, setOptimisticTasks]);
 
-    const startDrag = (e: React.MouseEvent, task: Task, type: DragState['type'], barType: 'plan' | 'actual' = 'plan') => {
+    const startDrag = (e: React.MouseEvent | React.TouchEvent, task: Task, type: DragState['type'], barType: 'plan' | 'actual' = 'plan') => {
         if (!onTaskUpdate) return;
-        e.preventDefault();
+        // e.preventDefault(); // Do not prevent default immediately on touch start to allow potential click recognition if not dragging? 
+        // Actually for custom drag, we usually want to prevent default scrolling.
+        // But for Mouse, preventDefault stops text selection.
+        if (e.type === 'mousedown') e.preventDefault();
         e.stopPropagation();
+
+        let clientX = 0;
+        if ('touches' in e) {
+            clientX = e.touches[0].clientX;
+        } else {
+            clientX = (e as React.MouseEvent).clientX;
+        }
 
         let startDate: Date;
         let endDate: Date;
@@ -173,7 +191,7 @@ export function useGanttDrag({
             taskId: task.id,
             type,
             barType,
-            startX: e.clientX,
+            startX: clientX,
             originalStart: startDate,
             originalEnd: endDate,
             currentStart: startDate,

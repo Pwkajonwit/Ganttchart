@@ -141,6 +141,39 @@ export default function ProjectDetailPage() {
     const [categoryColors, setCategoryColors] = useState<Record<string, string>>({});
     const [activeColorMenu, setActiveColorMenu] = useState<ColorMenuConfig | null>(null);
 
+    // Column Visibility
+    const [visibleColumns, setVisibleColumns] = useState({
+        duration: true,
+        cost: true,
+        quantity: true,
+        progress: true,
+        status: true
+    });
+    const [showColumnMenu, setShowColumnMenu] = useState(false);
+    const [isColumnsLoaded, setIsColumnsLoaded] = useState(false);
+
+    // Load columns from local storage on mount
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('project_detail_visible_columns');
+            if (saved) {
+                try {
+                    setVisibleColumns(JSON.parse(saved));
+                } catch (e) {
+                    console.error("Failed to parse visible columns", e);
+                }
+            }
+            setIsColumnsLoaded(true);
+        }
+    }, []);
+
+    // Save columns to local storage when changed
+    useEffect(() => {
+        if (isColumnsLoaded) {
+            localStorage.setItem('project_detail_visible_columns', JSON.stringify(visibleColumns));
+        }
+    }, [visibleColumns, isColumnsLoaded]);
+
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('gantt_category_colors');
@@ -1082,19 +1115,54 @@ export default function ProjectDetailPage() {
                         S-Curve
                     </Link>
 
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowColumnMenu(!showColumnMenu)}
+                            className="px-3 py-2 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-sm transition-all flex items-center gap-2 shadow-sm"
+                        >
+                            <Layers className="w-4 h-4 text-gray-500" />
+                            คอลัมน์
+                        </button>
+                        {showColumnMenu && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setShowColumnMenu(false)} />
+                                <div className="absolute top-full right-0 mt-1 w-56 bg-white border border-gray-300 shadow-lg rounded-sm z-50 p-2">
+                                    <div className="text-xs font-semibold text-gray-500 mb-2 px-2">แสดงคอลัมน์</div>
+                                    {[
+                                        { key: 'duration', label: 'ระยะเวลา' },
+                                        { key: 'cost', label: 'ต้นทุน' },
+                                        { key: 'quantity', label: 'ปริมาณ' },
+                                        { key: 'progress', label: 'ความคืบหน้า' },
+                                        { key: 'status', label: 'สถานะ' }
+                                    ].map(({ key, label }) => (
+                                        <label key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 cursor-pointer rounded-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={visibleColumns[key as keyof typeof visibleColumns]}
+                                                onChange={(e) => setVisibleColumns(prev => ({ ...prev, [key]: e.target.checked }))}
+                                                className="rounded border-gray-300 text-black focus:ring-black"
+                                            />
+                                            <span className="text-sm text-gray-700">{label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
                     {canEdit && (
                         <>
                             <div className="hidden md:flex items-center bg-gray-50 rounded-sm p-1 border border-gray-300">
                                 <button
                                     onClick={handleDownloadTemplate}
-                                    className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white hover:border border-gray-300 rounded-sm transition-all flex items-center gap-2 mr-1"
+                                    className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white border border-transparent hover:border-gray-300 rounded-sm transition-all flex items-center gap-2 mr-1"
                                     title="ดาวน์โหลดไฟล์ตัวอย่าง"
                                 >
-                                    <FileDown className="w-3.5 h-3.5" /> Template
+                                    <FileDown className="w-3.5 h-3.5" /> แบบฟอร์ม
                                 </button>
                                 <div className="w-px h-4 bg-gray-300 mx-1"></div>
-                                <label htmlFor="import-csv" className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white hover:border border-gray-300 rounded-sm cursor-pointer transition-all flex items-center gap-2">
-                                    <Upload className="w-3.5 h-3.5" /> Import
+                                <label htmlFor="import-csv" className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white border border-transparent hover:border-gray-300 rounded-sm cursor-pointer transition-all flex items-center gap-2">
+                                    <Upload className="w-3.5 h-3.5" /> นำเข้า
                                     <input
                                         id="import-csv"
                                         type="file"
@@ -1106,9 +1174,9 @@ export default function ProjectDetailPage() {
                                 <div className="w-px h-4 bg-gray-200 mx-1"></div>
                                 <button
                                     onClick={handleExport}
-                                    className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white hover:border border-gray-300 rounded-sm transition-all flex items-center gap-2"
+                                    className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white border border-transparent hover:border-gray-300 rounded-sm transition-all flex items-center gap-2"
                                 >
-                                    <Download className="w-3.5 h-3.5" /> Export
+                                    <Download className="w-3.5 h-3.5" /> ส่งออก
                                 </button>
                             </div>
 
@@ -1116,7 +1184,7 @@ export default function ProjectDetailPage() {
                                 onClick={handleDeleteAllTasks}
                                 className="px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-sm transition-colors border border-transparent hover:border-red-300"
                             >
-                                Clear All
+                                ลบทั้งหมด
                             </button>
 
                             <button
@@ -1135,11 +1203,11 @@ export default function ProjectDetailPage() {
             <div className="bg-white border border-gray-300 px-6 py-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     <div className="p-3 bg-gray-50 rounded-sm border border-gray-300 flex flex-col justify-between">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Total Cost</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">ต้นทุนรวม</span>
                         <span className="text-lg font-bold text-gray-900 mt-1">{projectStats.totalCost.toLocaleString()}</span>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-sm border border-gray-300 flex flex-col justify-between">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Progress</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">ความคืบหน้า</span>
                         <div className="mt-1">
                             <span className={`text-lg font-bold ${projectStats.overallProgress >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
                                 {projectStats.overallProgress.toFixed(1)}%
@@ -1150,14 +1218,14 @@ export default function ProjectDetailPage() {
                         </div>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-sm border border-gray-300 flex flex-col justify-between">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Duration</span>
-                        <span className="text-lg font-bold text-gray-900 mt-1">{calcDuration(project?.startDate || '', project?.endDate || '')} <span className="text-xs font-normal text-gray-500">Days</span></span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">ระยะเวลา</span>
+                        <span className="text-lg font-bold text-gray-900 mt-1">{calcDuration(project?.startDate || '', project?.endDate || '')} <span className="text-xs font-normal text-gray-500">วัน</span></span>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-sm border border-gray-300 flex flex-col justify-between">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Tasks</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">งานทั้งหมด</span>
                         <div className="flex items-baseline gap-2 mt-1">
                             <span className="text-lg font-bold text-gray-900">{projectStats.total}</span>
-                            <span className="text-xs text-gray-500">({projectStats.completed} Done)</span>
+                            <span className="text-xs text-gray-500">({projectStats.completed} เสร็จ)</span>
                         </div>
                     </div>
                 </div>
@@ -1186,12 +1254,12 @@ export default function ProjectDetailPage() {
                                 <tr>
                                     <th className="w-10 py-3 text-center"></th>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wide border-r border-transparent">รายการงาน</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wide w-32 border-r border-transparent">ผู้รับผิดชอบ</th>
-                                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-60 border-r border-transparent">ระยะเวลา</th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wide w-40 border-r border-transparent">ต้นทุน/ค่าใช้จ่าย</th>
-                                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-24 border-r border-transparent">ปริมาณ</th>
-                                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-48 border-r border-transparent">ความคืบหน้า</th>
-                                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-40 border-r border-transparent">สถานะ</th>
+
+                                    {visibleColumns.duration && <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-60 border-r border-transparent">ระยะเวลา</th>}
+                                    {visibleColumns.cost && <th className="px-4 py-3 text-right text-xs font-bold text-gray-900 uppercase tracking-wide w-40 border-r border-transparent">ต้นทุน/ค่าใช้จ่าย</th>}
+                                    {visibleColumns.quantity && <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-24 border-r border-transparent">ปริมาณ</th>}
+                                    {visibleColumns.progress && <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-48 border-r border-transparent">ความคืบหน้า</th>}
+                                    {visibleColumns.status && <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-40 border-r border-transparent">สถานะ</th>}
                                     <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wide w-28">จัดการ</th>
                                 </tr>
                             </thead>
@@ -1261,22 +1329,26 @@ export default function ProjectDetailPage() {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="px-4 py-4 text-center text-sm text-gray-300">-</td>
-                                                    <td className="px-4 py-4 text-center text-xs text-gray-600 font-medium tabular-nums">
-                                                        {catData.stats.minStartDate ? `${formatDateTH(catData.stats.minStartDate)} - ${formatDateTH(catData.stats.maxEndDate)}` : '-'}
-                                                    </td>
-                                                    <td className="px-4 py-4 text-right text-sm font-bold text-gray-900 tabular-nums">{catData.stats.totalCost.toLocaleString()}</td>
-                                                    <td className="px-4 py-4 text-center text-sm text-gray-600">-</td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
-                                                                <div className="h-full rounded-sm transition-all duration-500"
-                                                                    style={{ width: `${catData.stats.weightedProgress}%`, backgroundColor: catColor }}></div>
+
+                                                    {visibleColumns.duration && (
+                                                        <td className="px-4 py-4 text-center text-xs text-gray-600 font-medium tabular-nums">
+                                                            {catData.stats.minStartDate ? `${formatDateTH(catData.stats.minStartDate)} - ${formatDateTH(catData.stats.maxEndDate)}` : '-'}
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.cost && <td className="px-4 py-4 text-right text-sm font-bold text-gray-900 tabular-nums">{catData.stats.totalCost.toLocaleString()}</td>}
+                                                    {visibleColumns.quantity && <td className="px-4 py-4 text-center text-sm text-gray-600">-</td>}
+                                                    {visibleColumns.progress && (
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
+                                                                    <div className="h-full rounded-sm transition-all duration-500"
+                                                                        style={{ width: `${catData.stats.weightedProgress}%`, backgroundColor: catColor }}></div>
+                                                                </div>
+                                                                <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{catData.stats.weightedProgress.toFixed(0)}%</span>
                                                             </div>
-                                                            <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{catData.stats.weightedProgress.toFixed(0)}%</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center">-</td>
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.status && <td className="px-4 py-3 text-center">-</td>}
                                                     <td className="px-4 py-3 text-center">-</td>
                                                 </tr>
 
@@ -1337,22 +1409,26 @@ export default function ProjectDetailPage() {
                                                                                 )}
                                                                             </div>
                                                                         </td>
-                                                                        <td className="px-4 py-2.5 text-center text-sm text-gray-300">-</td>
-                                                                        <td className="px-4 py-2.5 text-center text-xs text-gray-600 tabular-nums">
-                                                                            {subStats.minStartDate ? `${formatDateTH(subStats.minStartDate)} - ${formatDateTH(subStats.maxEndDate)}` : '-'}
-                                                                        </td>
-                                                                        <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-900 tabular-nums">{subStats.totalCost.toLocaleString()}</td>
-                                                                        <td className="px-4 py-2.5 text-center text-sm text-gray-500">-</td>
-                                                                        <td className="px-4 py-2.5">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
-                                                                                    <div className="h-full rounded-sm transition-all duration-500"
-                                                                                        style={{ width: `${subStats.avgProgress}%`, backgroundColor: subColor }}></div>
+
+                                                                        {visibleColumns.duration && (
+                                                                            <td className="px-4 py-2.5 text-center text-xs text-gray-600 tabular-nums">
+                                                                                {subStats.minStartDate ? `${formatDateTH(subStats.minStartDate)} - ${formatDateTH(subStats.maxEndDate)}` : '-'}
+                                                                            </td>
+                                                                        )}
+                                                                        {visibleColumns.cost && <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-900 tabular-nums">{subStats.totalCost.toLocaleString()}</td>}
+                                                                        {visibleColumns.quantity && <td className="px-4 py-2.5 text-center text-sm text-gray-500">-</td>}
+                                                                        {visibleColumns.progress && (
+                                                                            <td className="px-4 py-2.5">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
+                                                                                        <div className="h-full rounded-sm transition-all duration-500"
+                                                                                            style={{ width: `${subStats.avgProgress}%`, backgroundColor: subColor }}></div>
+                                                                                    </div>
+                                                                                    <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{subStats.avgProgress.toFixed(0)}%</span>
                                                                                 </div>
-                                                                                <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{subStats.avgProgress.toFixed(0)}%</span>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-4 py-2.5 text-center">-</td>
+                                                                            </td>
+                                                                        )}
+                                                                        {visibleColumns.status && <td className="px-4 py-2.5 text-center">-</td>}
                                                                         <td className="px-4 py-2.5 text-center">-</td>
                                                                     </tr>
 
@@ -1411,22 +1487,26 @@ export default function ProjectDetailPage() {
                                                                                                     )}
                                                                                                 </div>
                                                                                             </td>
-                                                                                            <td className="px-4 py-2 text-center text-sm text-gray-300">-</td>
-                                                                                            <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
-                                                                                                {subSubStats.minStartDate ? `${formatDateTH(subSubStats.minStartDate)} - ${formatDateTH(subSubStats.maxEndDate)}` : '-'}
-                                                                                            </td>
-                                                                                            <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">{subSubStats.totalCost.toLocaleString()}</td>
-                                                                                            <td className="px-4 py-2 text-center text-sm text-gray-500">-</td>
-                                                                                            <td className="px-4 py-2">
-                                                                                                <div className="flex items-center gap-2">
-                                                                                                    <div className="flex-1 bg-gray-100 rounded-sm h-1 overflow-hidden border border-gray-300">
-                                                                                                        <div className="h-full rounded-sm transition-all duration-500"
-                                                                                                            style={{ width: `${subSubStats.avgProgress}%`, backgroundColor: subSubColor }}></div>
+
+                                                                                            {visibleColumns.duration && (
+                                                                                                <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
+                                                                                                    {subSubStats.minStartDate ? `${formatDateTH(subSubStats.minStartDate)} - ${formatDateTH(subSubStats.maxEndDate)}` : '-'}
+                                                                                                </td>
+                                                                                            )}
+                                                                                            {visibleColumns.cost && <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">{subSubStats.totalCost.toLocaleString()}</td>}
+                                                                                            {visibleColumns.quantity && <td className="px-4 py-2 text-center text-sm text-gray-500">-</td>}
+                                                                                            {visibleColumns.progress && (
+                                                                                                <td className="px-4 py-2">
+                                                                                                    <div className="flex items-center gap-2">
+                                                                                                        <div className="flex-1 bg-gray-100 rounded-sm h-1 overflow-hidden border border-gray-300">
+                                                                                                            <div className="h-full rounded-sm transition-all duration-500"
+                                                                                                                style={{ width: `${subSubStats.avgProgress}%`, backgroundColor: subSubColor }}></div>
+                                                                                                        </div>
+                                                                                                        <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{subSubStats.avgProgress.toFixed(0)}%</span>
                                                                                                     </div>
-                                                                                                    <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{subSubStats.avgProgress.toFixed(0)}%</span>
-                                                                                                </div>
-                                                                                            </td>
-                                                                                            <td className="px-4 py-2 text-center">-</td>
+                                                                                                </td>
+                                                                                            )}
+                                                                                            {visibleColumns.status && <td className="px-4 py-2 text-center">-</td>}
                                                                                             <td className="px-4 py-2 text-center">-</td>
                                                                                         </tr>
 
@@ -1444,36 +1524,44 @@ export default function ProjectDetailPage() {
                                                                                                     {canEdit && <GripVertical className="w-4 h-4 mx-auto" />}
                                                                                                 </td>
                                                                                                 <td className="px-4 py-2 pl-24 border-l-2 border-transparent hover:borderlue-200">
-                                                                                                    <span className="text-sm text-gray-900 font-medium">{task.name}</span>
-                                                                                                </td>
-                                                                                                <td className="px-4 py-2 text-left text-xs text-gray-600 border-l border-transparent truncate max-w-[120px]">
-                                                                                                    {task.responsible || '-'}
-                                                                                                </td>
-                                                                                                <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
-                                                                                                    <div className="flex flex-col gap-0.5">
-                                                                                                        <span>{formatDateTH(task.planStartDate)} - {formatDateTH(task.planEndDate)}</span>
-                                                                                                        {task.actualStartDate && (
-                                                                                                            <span className="text-emerald-600 font-medium">
-                                                                                                                {formatDateTH(task.actualStartDate)} - {task.actualEndDate ? formatDateTH(task.actualEndDate) : '...'}
-                                                                                                            </span>
-                                                                                                        )}
+                                                                                                    <div className="flex flex-col">
+                                                                                                        <span className="text-sm text-gray-900 font-medium">{task.name}</span>
+                                                                                                        {task.responsible && <span className="text-[10px] text-gray-500">ผู้รับผิดชอบ {task.responsible}</span>}
                                                                                                     </div>
                                                                                                 </td>
-                                                                                                <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">
-                                                                                                    {(task.cost || 0).toLocaleString()}
-                                                                                                </td>
-                                                                                                <td className="px-4 py-2 text-center text-xs text-gray-500">{task.quantity || '-'}</td>
-                                                                                                <td className="px-4 py-2">
-                                                                                                    <div className="flex items-center gap-2">
-                                                                                                        <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
-                                                                                                            <div className={`h-full ${task.progress === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                                                {visibleColumns.duration && (
+                                                                                                    <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
+                                                                                                        <div className="flex flex-col gap-0.5">
+                                                                                                            <span>{formatDateTH(task.planStartDate)} - {formatDateTH(task.planEndDate)}</span>
+                                                                                                            {task.actualStartDate && (
+                                                                                                                <span className="text-emerald-600 font-medium">
+                                                                                                                    {formatDateTH(task.actualStartDate)} - {task.actualEndDate ? formatDateTH(task.actualEndDate) : '...'}
+                                                                                                                </span>
+                                                                                                            )}
                                                                                                         </div>
-                                                                                                        <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{task.progress}%</span>
-                                                                                                    </div>
-                                                                                                </td>
-                                                                                                <td className="px-4 py-2 text-center">
-                                                                                                    {getStatusBadge(task.status, task.progress)}
-                                                                                                </td>
+                                                                                                    </td>
+                                                                                                )}
+                                                                                                {visibleColumns.cost && (
+                                                                                                    <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">
+                                                                                                        {(task.cost || 0).toLocaleString()}
+                                                                                                    </td>
+                                                                                                )}
+                                                                                                {visibleColumns.quantity && <td className="px-4 py-2 text-center text-xs text-gray-500">{task.quantity || '-'}</td>}
+                                                                                                {visibleColumns.progress && (
+                                                                                                    <td className="px-4 py-2">
+                                                                                                        <div className="flex items-center gap-2">
+                                                                                                            <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
+                                                                                                                <div className={`h-full ${task.progress === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                                                            </div>
+                                                                                                            <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{task.progress}%</span>
+                                                                                                        </div>
+                                                                                                    </td>
+                                                                                                )}
+                                                                                                {visibleColumns.status && (
+                                                                                                    <td className="px-4 py-2 text-center">
+                                                                                                        {getStatusBadge(task.status, task.progress)}
+                                                                                                    </td>
+                                                                                                )}
                                                                                                 <td className="px-4 py-2">
                                                                                                     <div className="flex items-center justify-center gap-1 opacity-100">
                                                                                                         {canUpdateProgress && <button onClick={() => openProgressModal(task)} className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all"><TrendingUp className="w-4 h-4" /></button>}
@@ -1505,36 +1593,44 @@ export default function ProjectDetailPage() {
                                                                                         {canEdit && <GripVertical className="w-4 h-4 mx-auto" />}
                                                                                     </td>
                                                                                     <td className="px-4 py-2 pl-16 border-l-2 border-transparent hover:border-amber-200">
-                                                                                        <span className="text-sm text-gray-900 font-medium">{task.name}</span>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2 text-left text-xs text-gray-600 border-l border-transparent truncate max-w-[120px]">
-                                                                                        {task.responsible || '-'}
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
-                                                                                        <div className="flex flex-col gap-0.5">
-                                                                                            <span>{formatDateTH(task.planStartDate)} - {formatDateTH(task.planEndDate)}</span>
-                                                                                            {task.actualStartDate && (
-                                                                                                <span className="text-emerald-600 font-medium">
-                                                                                                    {formatDateTH(task.actualStartDate)} - {task.actualEndDate ? formatDateTH(task.actualEndDate) : '...'}
-                                                                                                </span>
-                                                                                            )}
+                                                                                        <div className="flex flex-col">
+                                                                                            <span className="text-sm text-gray-900 font-medium">{task.name}</span>
+                                                                                            {task.responsible && <span className="text-[10px] text-gray-500">ผู้รับผิดชอบ {task.responsible}</span>}
                                                                                         </div>
                                                                                     </td>
-                                                                                    <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">
-                                                                                        {(task.cost || 0).toLocaleString()}
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2 text-center text-xs text-gray-500">{task.quantity || '-'}</td>
-                                                                                    <td className="px-4 py-2">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
-                                                                                                <div className={`h-full ${task.progress === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                                    {visibleColumns.duration && (
+                                                                                        <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
+                                                                                            <div className="flex flex-col gap-0.5">
+                                                                                                <span>{formatDateTH(task.planStartDate)} - {formatDateTH(task.planEndDate)}</span>
+                                                                                                {task.actualStartDate && (
+                                                                                                    <span className="text-emerald-600 font-medium">
+                                                                                                        {formatDateTH(task.actualStartDate)} - {task.actualEndDate ? formatDateTH(task.actualEndDate) : '...'}
+                                                                                                    </span>
+                                                                                                )}
                                                                                             </div>
-                                                                                            <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{task.progress}%</span>
-                                                                                        </div>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2 text-center">
-                                                                                        {getStatusBadge(task.status, task.progress)}
-                                                                                    </td>
+                                                                                        </td>
+                                                                                    )}
+                                                                                    {visibleColumns.cost && (
+                                                                                        <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">
+                                                                                            {(task.cost || 0).toLocaleString()}
+                                                                                        </td>
+                                                                                    )}
+                                                                                    {visibleColumns.quantity && <td className="px-4 py-2 text-center text-xs text-gray-500">{task.quantity || '-'}</td>}
+                                                                                    {visibleColumns.progress && (
+                                                                                        <td className="px-4 py-2">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
+                                                                                                    <div className={`h-full ${task.progress === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                                                </div>
+                                                                                                <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{task.progress}%</span>
+                                                                                            </div>
+                                                                                        </td>
+                                                                                    )}
+                                                                                    {visibleColumns.status && (
+                                                                                        <td className="px-4 py-2 text-center">
+                                                                                            {getStatusBadge(task.status, task.progress)}
+                                                                                        </td>
+                                                                                    )}
                                                                                     <td className="px-4 py-2 text-center">
                                                                                         <div className="flex items-center justify-center gap-1">
                                                                                             {canUpdateProgress && <button onClick={() => openProgressModal(task)} className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all"><TrendingUp className="w-4 h-4" /></button>}
@@ -1568,32 +1664,44 @@ export default function ProjectDetailPage() {
                                                                     {canEdit && <GripVertical className="w-4 h-4 mx-auto" />}
                                                                 </td>
                                                                 <td className="px-4 py-2 pl-12 border-l-2 border-transparent hover:borderlue-200">
-                                                                    <span className="text-sm text-gray-900 font-medium">{task.name}</span>
-                                                                </td>
-                                                                <td className="px-4 py-2 text-left text-xs text-gray-600 border-l border-transparent truncate max-w-[120px]">
-                                                                    {task.responsible || '-'}
-                                                                </td>
-                                                                <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
-                                                                    <div className="flex flex-col gap-0.5">
-                                                                        <span>{formatDateTH(task.planStartDate)} - {formatDateTH(task.planEndDate)}</span>
-                                                                        {task.actualStartDate && (
-                                                                            <span className="text-emerald-600 font-medium">
-                                                                                {formatDateTH(task.actualStartDate)} - {task.actualEndDate ? formatDateTH(task.actualEndDate) : '...'}
-                                                                            </span>
-                                                                        )}
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-sm text-gray-900 font-medium">{task.name}</span>
+                                                                        {task.responsible && <span className="text-[10px] text-gray-500">ผู้รับผิดชอบ {task.responsible}</span>}
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">{task.cost?.toLocaleString()}</td>
-                                                                <td className="px-4 py-2 text-center text-xs text-gray-500">{task.quantity || '-'}</td>
-                                                                <td className="px-4 py-2">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
-                                                                            <div className={`h-full ${task.progress === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                {visibleColumns.duration && (
+                                                                    <td className="px-4 py-2 text-center text-xs text-gray-600 tabular-nums">
+                                                                        <div className="flex flex-col gap-0.5">
+                                                                            <span>{formatDateTH(task.planStartDate)} - {formatDateTH(task.planEndDate)}</span>
+                                                                            {task.actualStartDate && (
+                                                                                <span className="text-emerald-600 font-medium">
+                                                                                    {formatDateTH(task.actualStartDate)} - {task.actualEndDate ? formatDateTH(task.actualEndDate) : '...'}
+                                                                                </span>
+                                                                            )}
                                                                         </div>
-                                                                        <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{task.progress}%</span>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-4 py-2 text-center">{getStatusBadge(task.status, task.progress)}</td>
+                                                                    </td>
+                                                                )}
+                                                                {visibleColumns.cost && (
+                                                                    <td className="px-4 py-2 text-right text-xs text-gray-900 tabular-nums">
+                                                                        {(task.cost || 0).toLocaleString()}
+                                                                    </td>
+                                                                )}
+                                                                {visibleColumns.quantity && <td className="px-4 py-2 text-center text-xs text-gray-500">{task.quantity || '-'}</td>}
+                                                                {visibleColumns.progress && (
+                                                                    <td className="px-4 py-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="flex-1 bg-gray-100 rounded-sm h-1.5 overflow-hidden border border-gray-300">
+                                                                                <div className={`h-full ${task.progress === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                            </div>
+                                                                            <span className="text-xs text-gray-600 w-8 text-right tabular-nums">{task.progress}%</span>
+                                                                        </div>
+                                                                    </td>
+                                                                )}
+                                                                {visibleColumns.status && (
+                                                                    <td className="px-4 py-2 text-center">
+                                                                        {getStatusBadge(task.status, task.progress)}
+                                                                    </td>
+                                                                )}
                                                                 <td className="px-4 py-2">
                                                                     <div className="flex items-center justify-center gap-1 opacity-100">
                                                                         {canUpdateProgress && <button onClick={() => openProgressModal(task)} className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all"><TrendingUp className="w-4 h-4" /></button>}

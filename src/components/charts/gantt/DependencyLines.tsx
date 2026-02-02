@@ -12,6 +12,8 @@ interface DependencyLinesProps {
     stickyWidth: number;
     onDeleteDependency: (taskId: string, predecessorId: string) => void;
     offsetY?: number;
+    startIndex: number;
+    endIndex: number;
 }
 
 export const DependencyLines: React.FC<DependencyLinesProps> = ({
@@ -22,7 +24,9 @@ export const DependencyLines: React.FC<DependencyLinesProps> = ({
     timeRange,
     stickyWidth,
     onDeleteDependency,
-    offsetY = 0
+    offsetY = 0,
+    startIndex,
+    endIndex
 }) => {
     const rowHeight = 32;
     const halfRow = rowHeight / 2;
@@ -39,6 +43,10 @@ export const DependencyLines: React.FC<DependencyLinesProps> = ({
                     if (!predTask) return null;
                     const sourceRowIndex = visibleRowMap.get(predId);
                     if (sourceRowIndex === undefined) return null; // Source hidden
+
+                    const minRow = Math.min(sourceRowIndex, targetRowIndex);
+                    const maxRow = Math.max(sourceRowIndex, targetRowIndex);
+                    if (maxRow < startIndex - 20 || minRow > endIndex + 20) return null;
 
                     // Calculate Coordinates
                     const getX = (t: Task, side: 'start' | 'end') => {
