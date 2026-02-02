@@ -68,7 +68,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
         <div key={category}>
             {/* Category Header */}
             <div
-                className={`flex bg-white border-b border-dashed border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors h-8 group ${isDragging ? 'opacity-40 bg-blue-50' : ''}`}
+                className={`flex bg-white border-b border-dashed border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors h-8 group relative ${isDragging ? 'opacity-40 bg-blue-50' : ''}`}
                 onClick={() => toggleCategory(category)}
                 onDragOver={(e) => onCategoryDragOver?.(e)}
                 onDrop={(e) => onCategoryDrop?.(e, category)}

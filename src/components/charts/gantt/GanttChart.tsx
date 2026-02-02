@@ -464,6 +464,7 @@ export default function GanttChart({
     }, [optimisticTasks]);
 
     const [scrollTop, setScrollTop] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
 
     const virtualData = useMemo(() => {
         const map = new Map<string, number>();
@@ -727,6 +728,29 @@ export default function GanttChart({
         };
     }, [optimisticTasks, budgetStats]);
 
+    // Scroll to Today Handler
+    const handleJumpToToday = () => {
+        const today = new Date();
+        setCurrentDate(today);
+
+        if (scrollContainerRef.current) {
+            const diffDays = differenceInDays(today, timeRange.start);
+            let leftPx = 0;
+            if (viewMode === 'day') leftPx = diffDays * config.cellWidth;
+            else if (viewMode === 'week') leftPx = (diffDays / 7) * config.cellWidth;
+            else leftPx = (diffDays / 30.44) * config.cellWidth;
+
+            // Center the view: (LeftPx) - (AvailableWidth / 2)
+            const availableWidth = (containerWidth || scrollContainerRef.current.clientWidth) - stickyWidth;
+            const scrollTo = Math.max(0, leftPx - (availableWidth / 2));
+
+            scrollContainerRef.current.scrollTo({
+                left: scrollTo,
+                behavior: 'smooth'
+            });
+        }
+    };
+
     return (
         <div ref={chartContainerRef} className="relative flex flex-col h-[750px] bg-white rounded border border-gray-300 w-full max-w-full overflow-hidden font-sans">
             <GanttToolbar
@@ -737,7 +761,7 @@ export default function GanttChart({
                 showDates={showDates}
                 onToggleDates={() => setShowDates(!showDates)}
                 onNavigate={navigate}
-                onJumpToToday={() => setCurrentDate(new Date())}
+                onJumpToToday={handleJumpToToday}
                 onExport={handleExportPDF}
                 onExportPDF={handleExportPDF}
                 budgetStats={budgetStats}
@@ -783,7 +807,7 @@ export default function GanttChart({
             )}
 
             <div className="flex-1 min-h-0 w-full relative">
-                <div ref={scrollContainerRef} className="absolute inset-0 overflow-auto custom-scrollbar" onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
+                <div ref={scrollContainerRef} className="absolute inset-0 overflow-auto custom-scrollbar" onScroll={(e) => { setScrollTop(e.currentTarget.scrollTop); setScrollLeft(e.currentTarget.scrollLeft); }}>
                     <div className="min-w-max flex flex-col">
                         <TimelineHeader
                             viewMode={viewMode}
@@ -795,7 +819,7 @@ export default function GanttChart({
                         />
 
                         <div className="relative">
-                            {/* Today Line */}
+                            {/* Today Line - Clipped to Timeline Area */}
                             {(() => {
                                 const targetDate = customDate || new Date();
                                 const todayOffset = differenceInDays(targetDate, timeRange.start);
@@ -805,8 +829,10 @@ export default function GanttChart({
                                 else leftPx = (todayOffset / 30.44) * config.cellWidth;
 
                                 return (
-                                    <div className="absolute top-0 bottom-0 z-10 pointer-events-none" style={{ left: `${stickyWidth + leftPx}px` }}>
-                                        <div className="h-full w-px bg-orange-500"></div>
+                                    <div className="absolute top-0 bottom-0 right-0 z-30 pointer-events-none overflow-hidden"
+                                        style={{ left: `${stickyWidth}px`, clipPath: `inset(0px 0px 0px ${Math.max(0, scrollLeft)}px)` }}>
+                                        <div className="absolute top-0 bottom-0 w-px bg-orange-500"
+                                            style={{ left: `${leftPx}px` }}></div>
                                     </div>
                                 );
                             })()}
@@ -823,6 +849,7 @@ export default function GanttChart({
                                     offsetY={36}
                                     startIndex={startIndex}
                                     endIndex={endIndex}
+                                    scrollLeft={scrollLeft}
                                 />
                             )}
 
@@ -835,7 +862,7 @@ export default function GanttChart({
                                 const projDateRange = projSummary.dateRange;
 
                                 return (
-                                    <div className="border-b-2 border-gray-300 stick-project-header">
+                                    <div className="border-b-2 border-gray-300 stick-project-header relative bg-white">
                                         <div className="flex bg-blue-50 border-b border-gray-200 h-9 font-bold text-gray-800">
                                             <div className="sticky left-0 z-[60] bg-blue-50 border-r border-gray-300 pl-4 flex items-center shadow-[1px_0_0px_rgba(0,0,0,0.05)]"
                                                 style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}>

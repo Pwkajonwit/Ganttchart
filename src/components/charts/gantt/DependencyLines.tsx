@@ -13,7 +13,9 @@ interface DependencyLinesProps {
     onDeleteDependency: (taskId: string, predecessorId: string) => void;
     offsetY?: number;
     startIndex: number;
+
     endIndex: number;
+    scrollLeft?: number;
 }
 
 export const DependencyLines: React.FC<DependencyLinesProps> = ({
@@ -26,13 +28,14 @@ export const DependencyLines: React.FC<DependencyLinesProps> = ({
     onDeleteDependency,
     offsetY = 0,
     startIndex,
-    endIndex
+    endIndex,
+    scrollLeft = 0
 }) => {
     const rowHeight = 32;
     const halfRow = rowHeight / 2;
 
     return (
-        <svg className="absolute inset-0 pointer-events-none z-10" style={{ width: '100%', height: '100%', left: stickyWidth }}>
+        <svg className="absolute inset-0 pointer-events-none z-30" style={{ width: '100%', height: '100%', left: stickyWidth, clipPath: `inset(0px 0px 0px ${Math.max(0, scrollLeft)}px)` }}>
             {tasks.flatMap(task => {
                 if (!task.predecessors || task.predecessors.length === 0) return [];
                 const targetRowIndex = visibleRowMap.get(task.id);
