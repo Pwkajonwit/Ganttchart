@@ -4,7 +4,7 @@ import { Task, Employee } from '@/types/construction';
 import { createPortal } from 'react-dom';
 import { ViewMode, GanttConfig, DragState, RowDragState, VisibleColumns, DateRange } from './types';
 import { format, parseISO, differenceInDays, addDays } from 'date-fns';
-import { getBarStyle, getActualDates, isWeekend, isToday, formatDateTH, getGroupSummary, formatDateRange, parseDate } from './utils';
+import { getBarStyle, getActualDates, isToday, formatDateTH, getGroupSummary, formatDateRange, parseDate } from './utils';
 
 interface TaskRowProps {
     task: Task;
@@ -96,6 +96,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
 
     // Check loading state
     const isLoading = loadingIds?.has(t.id);
+    const [isDragEnabled, setIsDragEnabled] = React.useState(false);
     const [showEmployeePicker, setShowEmployeePicker] = React.useState(false);
     const employeePickerRef = React.useRef<HTMLDivElement | null>(null);
     const employeePickerButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -150,20 +151,18 @@ export const TaskRow: React.FC<TaskRowProps> = ({
     const displayEndDate = isGroup && groupSummary ? groupSummary.maxEndDate : t.planEndDate;
     const displayProgress = isGroup && groupSummary ? groupSummary.progress : t.progress;
     const displayCost = isGroup && groupSummary ? groupSummary.totalCost : t.cost;
-    const durationVariance = React.useMemo(() => {
+    const endDateVariance = React.useMemo(() => {
         if (isGroup) return null;
-        if (!t.planStartDate || !t.planEndDate || !t.actualStartDate || !t.actualEndDate) return null;
+        if (!t.planEndDate || !t.actualEndDate) return null;
+        if (Number(t.progress) !== 100) return null;
 
-        const planStart = parseDate(t.planStartDate);
         const planEnd = parseDate(t.planEndDate);
-        const actualStart = parseDate(t.actualStartDate);
         const actualEnd = parseDate(t.actualEndDate);
-        if ([planStart, planEnd, actualStart, actualEnd].some(d => isNaN(d.getTime()))) return null;
+        if ([planEnd, actualEnd].some(d => isNaN(d.getTime()))) return null;
 
-        const plannedDays = differenceInDays(planEnd, planStart) + 1;
-        const actualDays = differenceInDays(actualEnd, actualStart) + 1;
-        return actualDays - plannedDays;
-    }, [isGroup, t.planStartDate, t.planEndDate, t.actualStartDate, t.actualEndDate]);
+        // Baseline = planned end date. Negative means finished later than plan.
+        return differenceInDays(planEnd, actualEnd);
+    }, [isGroup, t.planEndDate, t.actualEndDate, t.progress]);
 
     const handleToggleEmployee = async (employeeId: string) => {
         if (!onTaskUpdate) return;
@@ -187,16 +186,19 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                 <div className="h-0.5 bg-blue-500 w-full" />
             )}
             <div
-                className={`flex h-8 border-b border-dashed border-gray-200 transition-colors group relative
+                className={`flex h-8 border-b border-dashed border-gray-300/60 transition-colors group relative
                 ${tIsDragging ? 'opacity-50 bg-gray-100' : 'hover:bg-blue-50/30'}
                 ${tIsDropTarget && dropPosition === 'child' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : ''}
             `}
-                draggable={!!onTaskUpdate}
+                draggable={!!onTaskUpdate && isDragEnabled}
                 onDragStart={(e) => handleRowDragStart(e, t)}
                 onDragOver={(e) => handleRowDragOver(e, t.id)}
                 onDragLeave={handleRowDragLeave}
                 onDrop={(e) => handleRowDrop(e, t.id)}
-                onDragEnd={handleRowDragEnd}
+                onDragEnd={(e) => {
+                    setIsDragEnabled(false);
+                    handleRowDragEnd();
+                }}
             >
                 <div className="sticky left-0 z-[60] bg-white group-hover:bg-gray-50 border-r border-gray-300 flex items-center pl-4 shadow-[1px_0_0px_rgba(0,0,0,0.05)]"
                     style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}>
@@ -249,11 +251,26 @@ export const TaskRow: React.FC<TaskRowProps> = ({
 
                     {/* Drag handle */}
                     {onTaskUpdate && (
-                        <div className="cursor-grab mr-1 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                            type="button"
+                            className="cursor-grab mr-1 text-gray-400 hover:text-gray-600 transition-opacity"
+                            title="ย้ายตำแหน่ง"
+                            onMouseDown={(e) => {
+                                e.stopPropagation();
+                                setIsDragEnabled(true);
+                            }}
+                            onMouseUp={() => setIsDragEnabled(false)}
+                            onTouchStart={(e) => {
+                                e.stopPropagation();
+                                setIsDragEnabled(true);
+                            }}
+                            onTouchEnd={() => setIsDragEnabled(false)}
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                                 <circle cx="5" cy="5" r="2" /><circle cx="12" cy="5" r="2" /><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="5" cy="19" r="2" /><circle cx="12" cy="19" r="2" />
                             </svg>
-                        </div>
+                        </button>
                     )}
 
                     <div className={`flex-1 truncate text-xs transition-colors flex items-center pr-2 
@@ -291,12 +308,12 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                     </div>
 
                     {visibleColumns.cost && (
-                        <div className="w-20 h-full flex items-center justify-end border-l border-gray-200 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
+                        <div className="w-20 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
                             {isGroup ? (displayCost ? displayCost.toLocaleString() : '-') : (t.cost ? t.cost.toLocaleString() : '-')}
                         </div>
                     )}
                     {visibleColumns.weight && (
-                        <div className="w-16 h-full flex items-center justify-end border-l border-gray-200 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
+                        <div className="w-16 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
                             {(() => {
                                 if (t.type === 'group') {
                                     // Recursive sum for groups
@@ -312,18 +329,18 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                         </div>
                     )}
                     {visibleColumns.quantity && (
-                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-200 text-xs text-gray-600 font-medium font-mono shrink-0 pl-2 truncate">
+                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pl-2 truncate">
                             {isGroup ? (groupSummary?.count ? `${groupSummary.count} งาน` : '-') : (t.quantity || '-')}
                         </div>
                     )}
                     {visibleColumns.period && (
-                        <div className={`w-[180px] h-full flex items-center justify-start border-l border-gray-200 text-[10px] font-mono shrink-0 pl-2 whitespace-nowrap ${isGroup ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                        <div className={`w-[150px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] font-mono shrink-0 pl-2 whitespace-nowrap ${isGroup ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
                             {displayStartDate && displayEndDate ? (
                                 <>
                                     <span>{formatDateRange(displayStartDate, displayEndDate)}</span>
-                                    {!isGroup && durationVariance !== null && durationVariance !== 0 && (
-                                        <span className={`ml-1 font-semibold ${durationVariance > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                            ({durationVariance > 0 ? `+${durationVariance}` : durationVariance})
+                                    {!isGroup && endDateVariance !== null && endDateVariance !== 0 && (
+                                        <span className={`ml-1 font-semibold ${endDateVariance > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            {endDateVariance > 0 ? `+${endDateVariance}` : endDateVariance}
                                         </span>
                                     )}
                                 </>
@@ -332,7 +349,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                     )}
                     {visibleColumns.team && (
                         <div
-                            className="h-full border-l border-gray-200 shrink-0 flex items-center justify-between px-1.5 relative"
+                            className="h-full border-l border-gray-300/70 shrink-0 flex items-center justify-between px-1.5 relative"
                             style={{ width: '92px', minWidth: '92px' }}
                         >
                             <div className="flex items-center -space-x-1">
@@ -412,7 +429,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                         </div>
                     )}
                     {visibleColumns.progress && (
-                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-200 shrink-0 gap-1 pl-2">
+                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 gap-1 pl-2">
                             {isGroup ? (
                                 // Groups: Show calculated progress (read-only)
                                 <>
@@ -513,7 +530,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                 <div className="relative overflow-hidden" style={{ width: `${timeline.items.length * config.cellWidth}px` }}>
                     <div className="absolute inset-0 flex pointer-events-none">
                         {timeline.items.map((item: any, idx: number) => (
-                            <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-200 h-full ${viewMode === 'day' && isWeekend(item) ? 'bg-gray-50' : ''
+                            <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-300/60 h-full ${viewMode === 'day' ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''
                                 } ${viewMode === 'day' && isToday(item) ? 'bg-blue-50/20' : ''}`}
                                 style={{ width: config.cellWidth }} />
                         ))}

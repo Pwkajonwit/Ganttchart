@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Employee, Task } from '@/types/construction';
-import { format, differenceInDays, addMonths, subMonths, isValid } from 'date-fns';
+import { format, differenceInDays, addMonths, subMonths, isValid, isBefore } from 'date-fns';
 import { ChevronRight, ChevronDown, Layers, FolderOpen } from 'lucide-react';
 
 // Types & Utils
@@ -98,6 +98,82 @@ export default function SCurveChart(props: SCurveChartProps) {
 
     // 3. S-Curve Data Calculation (Hook)
     const sCurveData = useSCurveData(tasks, timeRange, calcMode);
+    const [customDate, setCustomDate] = useState<Date | null>(() => {
+        if (typeof window === 'undefined') return null;
+        const saved = localStorage.getItem('scurve_custom_date');
+        return saved ? parseDate(saved) : null;
+    });
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (customDate) localStorage.setItem('scurve_custom_date', format(customDate, 'yyyy-MM-dd'));
+        else localStorage.removeItem('scurve_custom_date');
+    }, [customDate]);
+
+    const kpiStats = useMemo(() => {
+        const points = sCurveData.points || [];
+        const firstPointDate = points.length > 0 ? points[0].date : null;
+        const lastPointDate = points.length > 0 ? points[points.length - 1].date : null;
+        const latestActualPoint = [...points].reverse().find(p => p.actual > 0);
+
+        const hasValidActualMaxDate =
+            isValid(sCurveData.maxActualDate) && sCurveData.maxActualDate.getFullYear() > 2000;
+
+        // Default behavior for S-Curve:
+        // - If user sets custom date => use it
+        // - Else anchor on latest actual endpoint (matches graph reading better)
+        let referenceDate = customDate
+            ? customDate
+            : hasValidActualMaxDate
+                ? sCurveData.maxActualDate
+                : new Date();
+
+        // Clamp into timeline window
+        if (firstPointDate && isBefore(referenceDate, firstPointDate)) {
+            referenceDate = latestActualPoint?.date || firstPointDate;
+        }
+        if (lastPointDate && isBefore(lastPointDate, referenceDate)) {
+            referenceDate = lastPointDate;
+        }
+
+        const pointAtOrBefore = (date: Date) => {
+            if (points.length === 0) return null;
+            let hit = points[0];
+            for (let i = 1; i < points.length; i++) {
+                if (points[i].date <= date) hit = points[i];
+                else break;
+            }
+            return hit;
+        };
+
+        // Use same source as chart lines to keep KPI and graph perfectly aligned.
+        const refPoint = pointAtOrBefore(referenceDate) || latestActualPoint || points[points.length - 1] || null;
+        const progress = refPoint ? refPoint.actual : 0;
+        const planToDate = refPoint ? refPoint.plan : 0;
+        const gap = progress - planToDate;
+
+        const leafTasks = tasks.filter(t => !tasks.some(child => child.parentTaskId === t.id));
+        let startedActualDays = 0;
+        let startedPlanDays = 0;
+
+        leafTasks.forEach((t) => {
+            if (!t.planStartDate || !t.planEndDate || !t.actualStartDate) return;
+            const planStart = parseDate(t.planStartDate);
+            const planEnd = parseDate(t.planEndDate);
+            const actualStart = parseDate(t.actualStartDate);
+            const actualEnd = t.actualEndDate ? parseDate(t.actualEndDate) : referenceDate;
+            if (![planStart, planEnd, actualStart, actualEnd].every(isValid)) return;
+
+            const normalizedActualEnd = isBefore(actualEnd, actualStart) ? actualStart : actualEnd;
+            startedPlanDays += Math.max(0, differenceInDays(planEnd, planStart) + 1);
+            startedActualDays += Math.max(0, differenceInDays(normalizedActualEnd, actualStart) + 1);
+        });
+
+        const varianceDays = startedPlanDays > 0 ? startedActualDays - startedPlanDays : null;
+        const variancePercent = startedPlanDays > 0 ? ((startedActualDays - startedPlanDays) / startedPlanDays) * 100 : null;
+
+        return { progress, planToDate, gap, varianceDays, variancePercent };
+    }, [tasks, customDate, sCurveData.points, sCurveData.maxActualDate]);
 
     // UI States
     const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -426,17 +502,20 @@ export default function SCurveChart(props: SCurveChartProps) {
                     useCostWeighting: calcMode === 'financial',
                     totalWeight: calcMode === 'financial' ? projectStats.totalCost : projectStats.totalDuration
                 }}
-                progressStats={{ totalActual: 0, totalPlan: 0 }}
+                kpiStats={kpiStats}
                 visibleColumns={visibleColumns}
                 onToggleColumn={(col) => setVisibleColumns((prev: any) => ({ ...prev, [col]: !prev[col] }))}
                 showDependencies={false}
                 onToggleDependencies={() => { }}
                 onExport={() => { }}
-                customDate={null}
-                onCustomDateChange={() => { }}
+                customDate={customDate}
+                onCustomDateChange={setCustomDate}
                 onBudgetChange={setManualBudget}
                 isExpanded={isExpanded}
                 onToggleExpand={() => setIsExpanded(prev => !prev)}
+                headerStatsDefaultVisible={false}
+                headerStatsStorageKey="scurve_show_header_stats_v2"
+                hideDependencyControl={true}
             />
 
             {/* Calculation Mode Toggle */}
@@ -468,6 +547,7 @@ export default function SCurveChart(props: SCurveChartProps) {
                             config={config}
                             stickyWidth={stickyWidth}
                             showDates={showDates}
+                            referenceDate={customDate}
                             visibleColumns={visibleColumns}
                         />
 
@@ -636,6 +716,7 @@ export default function SCurveChart(props: SCurveChartProps) {
                                     totalScope={sCurveData.totalScope}
                                     mode={calcMode}
                                     left={stickyWidth}
+                                    referenceDate={customDate}
                                 />
                             </div>
                         </div>
@@ -653,6 +734,27 @@ export default function SCurveChart(props: SCurveChartProps) {
                                 {val}
                             </div>
                         ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Footer Summary Bar */}
+            <div className="flex-shrink-0 bg-gray-100 border-t border-gray-300 z-[80] shadow-[0_-2px_10px_rgba(0,0,0,0.05)] font-mono text-xs">
+                <div className="flex h-10 items-center">
+                    <div
+                        className="sticky left-0 bg-gray-100 border-r border-gray-300 flex items-center px-4 font-bold text-gray-800 z-20"
+                        style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}
+                    >
+                        <div className="flex-1">TOTAL</div>
+                        <div className="w-28 text-right shrink-0 pr-2 flex items-center justify-end gap-2">
+                            <span className="text-gray-500 text-[10px]">ACTUAL:</span>
+                            <span className={`${kpiStats.progress >= 100 ? 'text-green-600' : 'text-blue-600'} text-sm`}>
+                                {kpiStats.progress.toFixed(2)}%
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex-1 bg-gray-50 text-gray-400 flex items-center justify-center italic text-[10px]">
+                        Overall Project Status
                     </div>
                 </div>
             </div>

@@ -13,6 +13,7 @@ interface SCurveGraphProps {
     totalScope: number;
     mode: 'physical' | 'financial';
     left: number;
+    referenceDate?: Date | null;
 }
 
 export const SCurveGraph: React.FC<SCurveGraphProps> = ({
@@ -25,12 +26,14 @@ export const SCurveGraph: React.FC<SCurveGraphProps> = ({
     viewMode,
     totalScope,
     mode,
-    left
+    left,
+    referenceDate
 }) => {
     const { points, maxActualDate } = data;
+    const timelineStart = timeline.items?.[0] ?? timeRange.start;
 
     const getX = (date: Date) => {
-        const diff = differenceInDays(date, timeRange.start);
+        const diff = differenceInDays(date, timelineStart);
         if (viewMode === 'day') return diff * config.cellWidth;
         if (viewMode === 'week') return (diff / 7) * config.cellWidth;
         // Month approximate
@@ -41,11 +44,19 @@ export const SCurveGraph: React.FC<SCurveGraphProps> = ({
         return height - (val / 100) * height;
     };
 
-    const today = new Date();
-    const todayX = getX(today);
+    const activeReferenceDate = referenceDate ?? new Date();
+    const referenceX = getX(activeReferenceDate);
+    const referenceLabel = referenceDate ? '' : ' ';
 
     // Filter points for actual line (up to max date)
     const actualPoints = points.filter(p => p.date <= maxActualDate);
+    const lastActualPoint = actualPoints.length > 0 ? actualPoints[actualPoints.length - 1] : null;
+    const planAnchorDate = lastActualPoint ? lastActualPoint.date : (points.length > 0 ? points[points.length - 1].date : null);
+    const planAtAnchorPoint = planAnchorDate
+        ? (points.find(p => p.date.getTime() === planAnchorDate.getTime())
+            || points.filter(p => p.date <= planAnchorDate).slice(-1)[0]
+            || points[points.length - 1])
+        : null;
 
     const formatScope = (val: number, m: 'physical' | 'financial') => {
         if (m === 'financial') return `฿${val.toLocaleString()}`;
@@ -69,14 +80,14 @@ export const SCurveGraph: React.FC<SCurveGraphProps> = ({
                             <div className="w-3 h-3 rounded-full bg-blue-500 border border-blue-600"></div>
                             <span className="text-xs font-semibold text-gray-700">Plan</span>
                         </div>
-                        <span className="text-xs text-gray-500">{points.length > 0 ? points[points.length - 1].plan.toFixed(1) : 0}%</span>
+                        <span className="text-xs text-gray-500">{planAtAnchorPoint ? planAtAnchorPoint.plan.toFixed(1) : 0}%</span>
                     </div>
                     <div className="flex items-center gap-2 justify-between">
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-green-500 border border-green-600"></div>
                             <span className="text-xs font-semibold text-gray-700">Actual</span>
                         </div>
-                        <span className="text-xs text-gray-500">{actualPoints.length > 0 ? actualPoints[actualPoints.length - 1].actual.toFixed(1) : 0}%</span>
+                        <span className="text-xs text-gray-500">{lastActualPoint ? lastActualPoint.actual.toFixed(1) : 0}%</span>
                     </div>
                     <div className="mt-1 pt-1 border-t border-gray-100 text-[10px] text-gray-500 text-right">
                         Total Scope: <span className="font-medium text-gray-900">{formatScope(totalScope, mode)}</span>
@@ -89,11 +100,11 @@ export const SCurveGraph: React.FC<SCurveGraphProps> = ({
                         <line key={i} x1={i * config.cellWidth} y1={0} x2={i * config.cellWidth} y2={height} stroke="#f3f4f6" strokeDasharray="4 4" />
                     ))}
 
-                    {/* Today Line */}
-                    {todayX >= 0 && todayX <= width && (
+                    {/* Reference Date Line */}
+                    {referenceX >= 0 && referenceX <= width && (
                         <g>
-                            <line x1={todayX} y1={0} x2={todayX} y2={height} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 4" />
-                            <text x={todayX} y={12} fill="#ef4444" fontSize="10" fontWeight="bold" textAnchor="middle">Today</text>
+                            <line x1={referenceX} y1={0} x2={referenceX} y2={height} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5 4" />
+                            <text x={referenceX} y={12} fill="#ef4444" fontSize="10" fontWeight="bold" textAnchor="middle">{referenceLabel}</text>
                         </g>
                     )}
 
@@ -132,26 +143,26 @@ export const SCurveGraph: React.FC<SCurveGraphProps> = ({
                     )}
 
                     {/* End Point Labels */}
-                    {points.length > 0 && (() => {
-                        const last = points[points.length - 1];
-                        const x = getX(last.date);
-                        const y = getY(last.plan);
-                        const label = `Plan: ${last.plan.toFixed(1)}%`;
+                    {planAtAnchorPoint && (() => {
+                        const x = getX(planAtAnchorPoint.date);
+                        const y = getY(planAtAnchorPoint.plan);
+                        const label = `Plan ${planAtAnchorPoint.plan.toFixed(1)}%`;
                         // Approx Text width needed
                         const width = 60;
+                        const labelY = y < 24 ? y + 6 : y - 20;
+                        const textY = y < 24 ? y + 17 : y - 9;
                         return (
                             <g>
-                                <rect x={x - width / 2} y={y - 20} width={width} height="16" rx="4" fill="#3b82f6" />
-                                <text x={x} y={y - 9} fill="white" fontSize="10" fontWeight="bold" textAnchor="middle">{label}</text>
+                                <rect x={x - width / 2} y={labelY} width={width} height="16" rx="4" fill="#3b82f6" />
+                                <text x={x} y={textY} fill="white" fontSize="10" fontWeight="bold" textAnchor="middle">{label}</text>
                             </g>
                         );
                     })()}
 
-                    {actualPoints.length > 0 && (() => {
-                        const last = actualPoints[actualPoints.length - 1];
-                        const x = getX(last.date);
-                        const y = getY(last.actual);
-                        const label = `Actual: ${last.actual.toFixed(1)}%`;
+                    {lastActualPoint && (() => {
+                        const x = getX(lastActualPoint.date);
+                        const y = getY(lastActualPoint.actual);
+                        const label = `Actual: ${lastActualPoint.actual.toFixed(1)}%`;
                         const width = 65;
                         return (
                             <g>

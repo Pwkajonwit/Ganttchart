@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, isToday, isWeekend } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { ViewMode, GanttConfig, VisibleColumns } from './types';
 
@@ -14,6 +14,7 @@ interface TimelineHeaderProps {
     config: GanttConfig;
     stickyWidth: number;
     showDates: boolean;
+    referenceDate?: Date | null;
     visibleColumns?: VisibleColumns;
     hideSidebar?: boolean;
     employeeColumnWidth?: number;
@@ -24,6 +25,7 @@ export default function TimelineHeader({
     timeline,
     config,
     stickyWidth,
+    referenceDate,
     visibleColumns,
     hideSidebar = false,
     employeeColumnWidth = 92
@@ -67,7 +69,7 @@ export default function TimelineHeader({
                                 </div>
                             )}
                             {visibleColumns.period && (
-                                <div className={`w-[180px] justify-start pl-2 ${commonHeaderClass}`}>
+                                <div className={`w-[150px] justify-start pl-2 ${commonHeaderClass}`}>
                                     ระยะเวลา
                                 </div>
                             )}
@@ -127,17 +129,28 @@ export default function TimelineHeader({
                 {/* Bottom Row: Items (Days/Weeks/Months) */}
                 <div className="flex h-6">
                     {timeline.items.map((item, idx) => {
-                        const isTodayDay = viewMode === 'day' && isToday(item);
-                        const isWeekendDay = viewMode === 'day' && isWeekend(item);
+                        const effectiveReferenceDate = referenceDate || new Date();
+                        const isTodayDay = viewMode === 'day' && isSameDay(item, effectiveReferenceDate);
+                        const isSaturday = viewMode === 'day' && item.getDay() === 6;
+                        const isSunday = viewMode === 'day' && item.getDay() === 0;
 
                         let label = '';
                         if (viewMode === 'day') label = format(item, 'd');
-                        else if (viewMode === 'week') label = format(item, 'w');
+                        else if (viewMode === 'week') {
+                            // Week number within each month (resets every month: 1,2,3,4...)
+                            const weekInMonth = timeline.items
+                                .slice(0, idx + 1)
+                                .filter(week =>
+                                    week.getMonth() === item.getMonth() &&
+                                    week.getFullYear() === item.getFullYear()
+                                ).length;
+                            label = String(weekInMonth);
+                        }
                         else label = format(item, 'MMM', { locale: th });
 
                         return (
                             <div key={idx} className={`flex-shrink-0 border-r border-gray-100 flex items-center justify-center text-[10px] 
-                                ${isTodayDay ? 'bg-blue-600 text-white font-bold' : isWeekendDay ? 'bg-gray-50 text-gray-400' : 'text-gray-500 bg-white'}
+                                ${isTodayDay ? 'bg-blue-600 text-white font-bold' : isSaturday ? 'bg-violet-50 text-violet-500' : isSunday ? 'bg-red-50 text-red-500' : 'text-gray-500 bg-white'}
                                 `} style={{ width: config.cellWidth }}>
                                 {label}
                             </div>

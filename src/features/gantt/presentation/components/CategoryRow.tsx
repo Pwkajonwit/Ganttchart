@@ -3,7 +3,7 @@ import { ChevronRight, ChevronDown, Plus, GripVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { Task } from '@/types/construction';
 import { VisibleColumns, GanttConfig, ViewMode, DateRange, ColorMenuConfig } from './types';
-import { getCategorySummary, getCategoryBarStyle, isWeekend, formatDateRange } from './utils';
+import { getCategorySummary, getCategoryBarStyle, formatDateRange } from './utils';
 
 interface CategoryRowProps {
     category: string;
@@ -70,7 +70,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
         <div key={category}>
             {/* Category Header */}
             <div
-                className={`flex bg-white border-b border-dashed border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors h-8 group relative ${isDragging ? 'opacity-40 bg-blue-50' : ''}`}
+                className={`flex bg-white border-b border-dashed border-gray-300/60 cursor-pointer hover:bg-gray-50 transition-colors h-8 group relative ${isDragging ? 'opacity-40 bg-blue-50' : ''}`}
                 onClick={() => toggleCategory(category)}
                 onDragOver={(e) => onCategoryDragOver?.(e)}
                 onDrop={(e) => onCategoryDrop?.(e, category)}
@@ -142,20 +142,20 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
 
                     {/* Columns */}
                     {visibleColumns.cost && (
-                        <div className="w-20 h-full flex items-center justify-end border-l border-gray-200 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
+                        <div className="w-20 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
                             {categorySummary.totalCost.toLocaleString()}
                         </div>
                     )}
                     {visibleColumns.weight && (
-                        <div className="w-16 h-full flex items-center justify-end border-l border-gray-200 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
+                        <div className="w-16 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
                             {categorySummary.totalWeight.toFixed(2)}%
                         </div>
                     )}
                     {visibleColumns.quantity && (
-                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-200 shrink-0 pl-2 truncate"></div>
+                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate"></div>
                     )}
                     {visibleColumns.period && (
-                        <div className="w-[180px] h-full flex items-center justify-start border-l border-gray-200 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
+                        <div className="w-[150px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
                             {categorySummary.dateRange ? (
                                 formatDateRange(categorySummary.dateRange.start, categorySummary.dateRange.end)
                             ) : '-'}
@@ -163,12 +163,12 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
                     )}
                     {visibleColumns.team && (
                         <div
-                            className="h-full flex items-center justify-center border-l border-gray-200 shrink-0"
+                            className="h-full flex items-center justify-center border-l border-gray-300/70 shrink-0"
                             style={{ width: `${employeeColumnWidth}px`, minWidth: `${employeeColumnWidth}px` }}
                         />
                     )}
                     {visibleColumns.progress && (
-                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-200 shrink-0 gap-1 pl-2 truncate">
+                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 gap-1 pl-2 truncate">
                             <span className="w-[45px] text-left text-xs text-blue-700 font-bold font-mono truncate">
                                 {categorySummary.avgProgress.toFixed(0)}%
                             </span>
@@ -182,7 +182,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
                     {/* Grid lines background */}
                     <div className="absolute inset-0 flex pointer-events-none">
                         {timeline.items.map((item, idx) => (
-                            <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-200 h-full ${viewMode === 'day' && isWeekend(item) ? 'bg-gray-50/50' : ''
+                            <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-300/60 h-full ${viewMode === 'day' ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''
                                 }`}
                                 style={{ width: config.cellWidth }} />
                         ))}

@@ -36,9 +36,12 @@ interface GanttToolbarProps {
         useCostWeighting: boolean;
         totalWeight: number;
     };
-    progressStats: {
-        totalActual: number;
-        totalPlan: number;
+    kpiStats: {
+        progress: number;
+        planToDate: number;
+        gap: number;
+        varianceDays: number | null;
+        variancePercent: number | null;
     };
     visibleColumns?: VisibleColumns;
     onToggleColumn?: (col: keyof VisibleColumns) => void;
@@ -50,6 +53,9 @@ interface GanttToolbarProps {
     onBudgetChange?: (amount: number) => void;
     isExpanded?: boolean;
     onToggleExpand?: () => void;
+    headerStatsDefaultVisible?: boolean;
+    headerStatsStorageKey?: string;
+    hideDependencyControl?: boolean;
 }
 
 export default function GanttToolbar({
@@ -64,7 +70,7 @@ export default function GanttToolbar({
     onExport,
     onExportPDF,
     budgetStats,
-    progressStats,
+    kpiStats,
     visibleColumns,
     onToggleColumn,
     onToggleAllColumns,
@@ -74,7 +80,10 @@ export default function GanttToolbar({
     onCustomDateChange,
     onBudgetChange,
     isExpanded = false,
-    onToggleExpand
+    onToggleExpand,
+    headerStatsDefaultVisible = false,
+    headerStatsStorageKey = 'gantt_show_header_stats_v2',
+    hideDependencyControl = false
 }: GanttToolbarProps) {
     const [isBudgetEditing, setIsBudgetEditing] = React.useState(false);
     const [budgetInput, setBudgetInput] = React.useState('');
@@ -91,6 +100,22 @@ export default function GanttToolbar({
         }
     };
     const [showColumnMenu, setShowColumnMenu] = React.useState(false);
+    const [showHeaderStats, setShowHeaderStats] = React.useState(headerStatsDefaultVisible);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const saved = localStorage.getItem(headerStatsStorageKey);
+        if (saved !== null) {
+            setShowHeaderStats(saved === 'true');
+        } else {
+            setShowHeaderStats(headerStatsDefaultVisible);
+        }
+    }, [headerStatsStorageKey, headerStatsDefaultVisible]);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return;
+        localStorage.setItem(headerStatsStorageKey, String(showHeaderStats));
+    }, [showHeaderStats, headerStatsStorageKey]);
 
     // Close menu when clicking outside (simple handling)
     React.useEffect(() => {
@@ -120,7 +145,8 @@ export default function GanttToolbar({
                 <div className="hidden lg:block w-px h-8 bg-gray-200"></div>
 
                 {/* KPI / Stats Minimalist View */}
-                <div className="hidden lg:flex items-center gap-6">
+                {showHeaderStats && (
+                    <div className="hidden lg:flex items-center gap-6">
                     <div className="flex flex-col">
                         <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Budget</span>
                         <div className="flex items-baseline gap-1" onDoubleClick={() => setIsBudgetEditing(true)}>
@@ -144,12 +170,55 @@ export default function GanttToolbar({
                     <div className="flex flex-col">
                         <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Progress</span>
                         <div className="flex items-baseline gap-1">
-                            <span className={`text-sm font-bold font-mono ${progressStats.totalActual > 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                                {progressStats.totalActual.toFixed(1)}%
+                            <span className={`text-sm font-bold font-mono ${kpiStats.progress > 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                                {kpiStats.progress.toFixed(1)}%
                             </span>
                         </div>
                     </div>
-                </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Plan-to-Date</span>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-sm font-bold font-mono text-gray-900">
+                                {kpiStats.planToDate.toFixed(1)}%
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Gap</span>
+                        <div className="flex items-baseline gap-1">
+                            <span
+                                className={`text-sm font-bold font-mono ${kpiStats.gap > 0
+                                        ? 'text-green-600'
+                                        : kpiStats.gap < 0
+                                            ? 'text-red-600'
+                                            : 'text-gray-700'
+                                    }`}
+                            >
+                                {kpiStats.gap > 0 ? '+' : ''}{kpiStats.gap.toFixed(1)}pp
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Variance</span>
+                        <div className="flex items-baseline gap-1">
+                            <span
+                                className={`text-sm font-bold font-mono ${kpiStats.varianceDays === null
+                                        ? 'text-gray-500'
+                                        : kpiStats.varianceDays > 0
+                                            ? 'text-green-600'
+                                            : kpiStats.varianceDays < 0
+                                                ? 'text-red-600'
+                                                : 'text-gray-700'
+                                    }`}
+                            >
+                                {kpiStats.varianceDays === null || kpiStats.variancePercent === null
+                                    ? '-'
+                                    : `${kpiStats.variancePercent > 0 ? '+' : ''}${kpiStats.variancePercent.toFixed(1)}% (${kpiStats.varianceDays > 0 ? '+' : ''}${kpiStats.varianceDays}d)`}
+                            </span>
+                        </div>
+                    </div>
+                    </div>
+                )}
             </div>
 
             {/* Right: Controls */}
@@ -190,11 +259,20 @@ export default function GanttToolbar({
 
                 {/* Action Tools */}
                 <div className="flex items-center gap-2">
-                    <button onClick={onToggleDependencies}
-                        title={showDependencies ? 'ซ่อนเส้นความสัมพันธ์' : 'แสดงเส้นความสัมพันธ์'}
-                        className={`p-2 rounded-md transition-all ${showDependencies ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}>
-                        <LinkIcon className="w-4 h-4" />
+                    <button
+                        onClick={() => setShowHeaderStats(prev => !prev)}
+                        title={showHeaderStats ? 'Hide Header Stats' : 'Show Header Stats'}
+                        className={`p-2 rounded-md transition-all ${showHeaderStats ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                    >
+                        {showHeaderStats ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
+                    {!hideDependencyControl && (
+                        <button onClick={onToggleDependencies}
+                            title={showDependencies ? 'ซ่อนเส้นความสัมพันธ์' : 'แสดงเส้นความสัมพันธ์'}
+                            className={`p-2 rounded-md transition-all ${showDependencies ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}>
+                            <LinkIcon className="w-4 h-4" />
+                        </button>
+                    )}
                     {onToggleExpand && (
                         <button
                             onClick={onToggleExpand}

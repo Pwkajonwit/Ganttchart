@@ -8,7 +8,7 @@ import { ViewMode, RowDragState, VisibleColumns, ColorMenuConfig } from './types
 import { DependencyLines } from './DependencyLines';
 import { CategoryRow } from './CategoryRow';
 import { TaskRow } from './TaskRow';
-import { getCategorySummary, getCategoryBarStyle, formatDateRange, isWeekend } from './utils'; // Modified import
+import { getCategorySummary, getCategoryBarStyle, formatDateRange } from './utils'; // Modified import
 import GanttToolbar from './GanttToolbar';
 import TimelineHeader from './TimelineHeader';
 import { usePdfExport } from '@/hooks/usePdfExport';
@@ -119,7 +119,7 @@ export default function GanttChart({
     const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
     const [collapsedSubcategories, setCollapsedSubcategories] = useState<Set<string>>(new Set());
     const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
-    const [showDependencies, setShowDependencies] = useState(true);
+    const [showDependencies, setShowDependencies] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
 
     // Column Visibility
@@ -128,12 +128,12 @@ export default function GanttChart({
         weight: false,
         quantity: false,
         period: true,
-        team: true,
+        team: false,
         progress: true
     };
     const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>(() => {
         if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('gantt_visibleColumns_v2');
+            const saved = localStorage.getItem('gantt_visibleColumns_v3');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved) as Partial<VisibleColumns>;
@@ -149,7 +149,7 @@ export default function GanttChart({
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            localStorage.setItem('gantt_visibleColumns_v2', JSON.stringify(visibleColumns));
+            localStorage.setItem('gantt_visibleColumns_v3', JSON.stringify(visibleColumns));
         }
     }, [visibleColumns]);
 
@@ -157,6 +157,7 @@ export default function GanttChart({
     const [rowDragState, setRowDragState] = useState<RowDragState | null>(null);
     const [dropTargetId, setDropTargetId] = useState<string | null>(null);
     const [dropPosition, setDropPosition] = useState<'above' | 'below' | 'child' | null>(null);
+    const [enabledGroupDragId, setEnabledGroupDragId] = useState<string | null>(null);
     const [internalCategoryOrder, setInternalCategoryOrder] = useState<string[]>([]);
     const categoryOrder = propCategoryOrder || internalCategoryOrder;
 
@@ -257,6 +258,18 @@ export default function GanttChart({
     const handleCategoryDrop = async (e: React.DragEvent, targetCategory: string) => {
         e.preventDefault();
         e.stopPropagation();
+
+        if (rowDragState && onTaskUpdate) {
+            await moveTaskToScope(rowDragState.taskId, {
+                parentTaskId: null,
+                category: targetCategory,
+                subcategory: '',
+                subsubcategory: ''
+            });
+            handleRowDragEnd();
+            return;
+        }
+
         const sourceId = categoryDragState?.id;
         const dragType = categoryDragState?.type;
 
@@ -603,7 +616,7 @@ export default function GanttChart({
         if (visibleColumns.cost) w += 80;
         if (visibleColumns.weight) w += 64; // w-16
         if (visibleColumns.quantity) w += 80; // w-20
-        if (visibleColumns.period) w += 180; // w-[180px]
+        if (visibleColumns.period) w += 150; // w-[150px]
         if (visibleColumns.team) w += EMPLOYEE_COL_WIDTH;
         if (visibleColumns.progress) w += 80;
         return w + 30;
@@ -630,6 +643,31 @@ export default function GanttChart({
         setRowDragState({ taskId: t.id, taskName: t.name });
     };
     const handleRowDragEnd = () => { setRowDragState(null); setDropTargetId(null); setDropPosition(null); };
+    const moveTaskToScope = async (
+        taskId: string,
+        scope: { category: string; subcategory?: string; subsubcategory?: string; parentTaskId?: string | null }
+    ) => {
+        if (!onTaskUpdate) return;
+        const scopeSub = scope.subcategory || '';
+        const scopeSubSub = scope.subsubcategory || '';
+        const scopeParent = scope.parentTaskId ?? null;
+
+        const siblings = optimisticTasks.filter(t =>
+            (t.parentTaskId || null) === scopeParent &&
+            (t.category || '') === scope.category &&
+            (t.subcategory || '') === scopeSub &&
+            (t.subsubcategory || '') === scopeSubSub
+        );
+        const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(t => t.order || 0)) : 0;
+
+        await onTaskUpdate(taskId, {
+            parentTaskId: scopeParent,
+            category: scope.category,
+            subcategory: scopeSub,
+            subsubcategory: scopeSubSub,
+            order: maxOrder + 100000
+        });
+    };
     const handleRowDragOver = (e: React.DragEvent, targetId?: string) => {
         e.preventDefault();
         if (targetId && rowDragState && rowDragState.taskId !== targetId) {
@@ -646,6 +684,32 @@ export default function GanttChart({
             else setDropPosition(canBeChild ? 'child' : 'above'); // Default to 'above' if not a group
             setDropTargetId(targetId);
         }
+    };
+    const handleTaskDropToSubcategory = async (e: React.DragEvent, category: string, subcategory: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!rowDragState || !onTaskUpdate) return;
+        const sourceId = rowDragState.taskId;
+        await moveTaskToScope(sourceId, {
+            parentTaskId: null,
+            category,
+            subcategory,
+            subsubcategory: ''
+        });
+        handleRowDragEnd();
+    };
+    const handleTaskDropToSubsubcategory = async (e: React.DragEvent, category: string, subcategory: string, subsubcategory: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!rowDragState || !onTaskUpdate) return;
+        const sourceId = rowDragState.taskId;
+        await moveTaskToScope(sourceId, {
+            parentTaskId: null,
+            category,
+            subcategory,
+            subsubcategory
+        });
+        handleRowDragEnd();
     };
     const handleRowDrop = async (e: React.DragEvent, targetId: string) => {
         e.preventDefault();
@@ -761,6 +825,76 @@ export default function GanttChart({
         };
     }, [optimisticTasks, budgetStats]);
 
+    // Readable KPI set: Progress / Plan-to-Date / Gap / Variance
+    const kpiStats = useMemo(() => {
+        const referenceDate = customDate || new Date();
+        const leafTasks = optimisticTasks.filter(t => t.type !== 'group');
+
+        let planWeighted = 0;
+        let weightSum = 0;
+        let startedActualDays = 0;
+        let startedPlanDays = 0;
+
+        leafTasks.forEach((t) => {
+            if (!t.planStartDate || !t.planEndDate) return;
+
+            const planStart = parseISO(t.planStartDate);
+            const planEnd = parseISO(t.planEndDate);
+            if ([planStart, planEnd].some(d => isNaN(d.getTime()))) return;
+
+            const taskWeight = getTaskWeight(t);
+            if (taskWeight > 0) {
+                weightSum += taskWeight;
+                const planDays = Math.max(1, differenceInDays(planEnd, planStart) + 1);
+                let plannedPercentAtRef = 0;
+
+                if (isBefore(referenceDate, planStart)) {
+                    plannedPercentAtRef = 0;
+                } else if (!isBefore(referenceDate, planEnd)) {
+                    plannedPercentAtRef = 100;
+                } else {
+                    const elapsed = Math.max(0, differenceInDays(referenceDate, planStart) + 1);
+                    plannedPercentAtRef = Math.min(100, (elapsed / planDays) * 100);
+                }
+                planWeighted += taskWeight * plannedPercentAtRef;
+            }
+
+            if (!t.actualStartDate) return;
+            const actualStart = parseISO(t.actualStartDate);
+            const actualEnd = t.actualEndDate ? parseISO(t.actualEndDate) : referenceDate;
+
+            if ([planStart, planEnd, actualStart, actualEnd].some(d => isNaN(d.getTime()))) return;
+
+            const normalizedActualEnd = isBefore(actualEnd, actualStart) ? actualStart : actualEnd;
+            const planDays = Math.max(0, differenceInDays(planEnd, planStart) + 1);
+            const actualDays = Math.max(0, differenceInDays(normalizedActualEnd, actualStart) + 1);
+
+            startedPlanDays += planDays;
+            startedActualDays += actualDays;
+        });
+
+        const actualWorkPercent = startedPlanDays > 0
+            ? (startedActualDays / startedPlanDays) * 100
+            : 0;
+
+        const varianceDays = startedPlanDays > 0
+            ? startedActualDays - startedPlanDays
+            : null;
+        const variancePercent = startedPlanDays > 0
+            ? ((startedActualDays - startedPlanDays) / startedPlanDays) * 100
+            : null;
+        const planToDate = weightSum > 0 ? planWeighted / weightSum : 0;
+        const gap = summaryStats.progress - planToDate;
+
+        return {
+            progress: summaryStats.progress,
+            planToDate,
+            gap,
+            varianceDays,
+            variancePercent
+        };
+    }, [optimisticTasks, customDate, summaryStats.progress, getTaskWeight]);
+
     // Scroll to Today Handler
     const handleJumpToToday = () => {
         const today = new Date();
@@ -804,7 +938,7 @@ export default function GanttChart({
                 onExport={handleExportPDF}
                 onExportPDF={handleExportPDF}
                 budgetStats={budgetStats}
-                progressStats={{ totalActual: summaryStats.progress, totalPlan: 0 }}
+                kpiStats={kpiStats}
                 visibleColumns={visibleColumns}
                 onToggleColumn={(col) => setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }))}
                 onToggleAllColumns={(visible) => {
@@ -856,12 +990,13 @@ export default function GanttChart({
                             config={config}
                             stickyWidth={stickyWidth}
                             showDates={showDates}
+                            referenceDate={customDate}
                             visibleColumns={visibleColumns}
                             employeeColumnWidth={EMPLOYEE_COL_WIDTH}
                         />
 
                         <div className="relative">
-                            {/* Today Line - Clipped to Timeline Area */}
+                            {/* Reference Day Highlight - Clipped to Timeline Area */}
                             {(() => {
                                 const targetDate = customDate || new Date();
                                 const todayOffset = differenceInDays(targetDate, timeRange.start);
@@ -873,8 +1008,19 @@ export default function GanttChart({
                                 return (
                                     <div className="absolute top-0 bottom-0 right-0 z-30 pointer-events-none overflow-hidden"
                                         style={{ left: `${stickyWidth}px`, clipPath: `inset(0px 0px 0px ${Math.max(0, scrollLeft)}px)` }}>
-                                        <div className="absolute top-0 bottom-0 w-px bg-orange-500"
-                                            style={{ left: `${leftPx}px` }}></div>
+                                        {viewMode === 'day' ? (
+                                            <div
+                                                className="absolute top-0 bottom-0 bg-green-100/35"
+                                                style={{ left: `${leftPx}px`, width: `${config.cellWidth}px` }}
+                                            >
+                                                <div className="absolute top-0 bottom-0 w-px bg-yellow-500/80" style={{ left: '50%' }} />
+                                            </div>
+                                        ) : (
+                                            <div
+                                                className="absolute top-0 bottom-0 w-px bg-orange-500"
+                                                style={{ left: `${leftPx}px` }}
+                                            />
+                                        )}
                                     </div>
                                 );
                             })()}
@@ -916,33 +1062,33 @@ export default function GanttChart({
 
                                                 {/* Columns */}
                                                 {visibleColumns.cost && (
-                                                    <div className="w-20 h-full flex items-center justify-end border-l border-gray-300/50 text-xs shrink-0 pr-2 truncate">
+                                                    <div className="w-20 h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
                                                         {displayCost.toLocaleString()}
                                                     </div>
                                                 )}
                                                 {visibleColumns.weight && (
-                                                    <div className="w-16 h-full flex items-center justify-end border-l border-gray-300/50 text-xs shrink-0 pr-2 truncate">
+                                                    <div className="w-16 h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
                                                         100%
                                                     </div>
                                                 )}
                                                 {visibleColumns.quantity && (
-                                                    <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/50 shrink-0 pl-2 truncate">
+                                                    <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate">
                                                         -
                                                     </div>
                                                 )}
                                                 {visibleColumns.period && (
-                                                    <div className="w-[180px] h-full flex items-center justify-start border-l border-gray-300/50 text-[10px] shrink-0 pl-2 truncate">
+                                                    <div className="w-[150px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">
                                                         {projDateRange ? formatDateRange(projDateRange.start, projDateRange.end) : '-'}
                                                     </div>
                                                 )}
                                                 {visibleColumns.team && (
                                                     <div
-                                                        className="h-full flex items-center justify-center border-l border-gray-300/50 shrink-0"
+                                                        className="h-full flex items-center justify-center border-l border-gray-300/70 shrink-0"
                                                         style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
                                                     />
                                                 )}
                                                 {visibleColumns.progress && (
-                                                    <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/50 shrink-0 gap-1 pl-2 truncate text-blue-700">
+                                                    <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 gap-1 pl-2 truncate text-blue-700">
                                                         {displayProgress.toFixed(0)}%
                                                     </div>
                                                 )}
@@ -952,7 +1098,7 @@ export default function GanttChart({
                                             <div className="flex-1 relative" style={{ width: `${timeline.items.length * config.cellWidth}px` }}>
                                                 <div className="absolute inset-0 flex pointer-events-none">
                                                     {timeline.items.map((item, idx) => (
-                                                        <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-200 h-full ${viewMode === 'day' && isWeekend(item) ? 'bg-gray-50/50' : ''}`}
+                                                        <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-300/60 h-full ${viewMode === 'day' ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''}`}
                                                             style={{ width: config.cellWidth }} />
                                                     ))}
                                                 </div>
@@ -1021,24 +1167,58 @@ export default function GanttChart({
                                             ] as Task[];
                                             const subSummary = getCategorySummary(subTasks, getTaskWeight);
                                             const subDateRange = subSummary.dateRange;
+                                            const isSubCollapsed = collapsedSubcategories.has(uniqueSubcatId);
 
                                             return (
                                                 <div key={row.id}>
                                                     {/* Subcategory Header */}
                                                     <div
-                                                        className={`flex bg-gray-50/50 border-b border-dashed border-gray-200 h-8 group cursor-pointer hover:bg-gray-100/50 transition-colors ${categoryDragState?.id === uniqueSubcatId && categoryDragState?.type === 'subcategory' ? 'opacity-40 bg-blue-50' : ''}`}
+                                                        className={`flex bg-white border-b border-dashed border-gray-200 h-8 group cursor-pointer hover:bg-slate-50 transition-colors ${categoryDragState?.id === uniqueSubcatId && categoryDragState?.type === 'subcategory' ? 'opacity-40 bg-blue-50' : ''}`}
                                                         onClick={() => toggleSubcategory(uniqueSubcatId)}
-                                                        draggable
+                                                        draggable={enabledGroupDragId === uniqueSubcatId}
                                                         onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubcatId, 'subcategory')}
                                                         onDragOver={handleCategoryDragOver}
-                                                        onDrop={(e) => handleSubcategoryDrop(e, uniqueSubcatId)}
+                                                        onDrop={(e) => rowDragState
+                                                            ? handleTaskDropToSubcategory(e, category, subcat)
+                                                            : handleSubcategoryDrop(e, uniqueSubcatId)}
+                                                        onDragEnd={() => setEnabledGroupDragId(null)}
                                                     >
-                                                        <div className="sticky left-0 z-[60] bg-gray-50 group-hover:bg-gray-100 border-r border-gray-300 pl-2 flex items-center"
+                                                        <div className="sticky left-0 z-[60] h-full bg-white group-hover:bg-slate-50 border-r border-gray-300 pl-2 flex items-center"
                                                             style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px`, paddingLeft: '24px' }}>
                                                             {/* Drag Handle */}
-                                                            <div className="cursor-grab text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 mr-1">
+                                                            <button
+                                                                type="button"
+                                                                className="cursor-grab text-gray-400 hover:text-gray-600 mr-1"
+                                                                title="ย้ายหมวดย่อย"
+                                                                onMouseDown={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setEnabledGroupDragId(uniqueSubcatId);
+                                                                }}
+                                                                onMouseUp={() => setEnabledGroupDragId(null)}
+                                                                onTouchStart={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setEnabledGroupDragId(uniqueSubcatId);
+                                                                }}
+                                                                onTouchEnd={() => setEnabledGroupDragId(null)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
                                                                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6h8v2H8V6zm0 4h8v2H8v-2zm0 4h8v2H8v-2z" /></svg>
-                                                            </div>
+                                                            </button>
+
+                                                            <button
+                                                                className="w-4 h-4 mr-1 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleSubcategory(uniqueSubcatId);
+                                                                }}
+                                                                title={isSubCollapsed ? 'ขยายรายการย่อย' : 'ยุบรายการย่อย'}
+                                                            >
+                                                                {isSubCollapsed ? (
+                                                                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z" /></svg>
+                                                                ) : (
+                                                                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5 7l5 6 5-6H5z" /></svg>
+                                                                )}
+                                                            </button>
 
                                                             {/* Color Picker for Subcategory */}
                                                             <button
@@ -1057,8 +1237,8 @@ export default function GanttChart({
                                                                 title="Change Subcategory Color"
                                                             />
 
-                                                            <div className="flex-1 flex items-center overflow-hidden">
-                                                                <div className="flex-1 flex items-center min-w-0 pr-2">
+                                                            <div className="h-full flex-1 flex items-stretch overflow-hidden">
+                                                                <div className="h-full flex-1 flex items-center min-w-0 pr-2">
                                                                     <div className="font-semibold text-xs text-gray-800 truncate" style={{ color: color }}>
                                                                         {subcat}
                                                                     </div>
@@ -1074,27 +1254,27 @@ export default function GanttChart({
                                                                 </div>
 
                                                                 {/* Subcategory Summary Cols */}
-                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-200 text-xs text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subSummary.totalCost || 0).toLocaleString()}</div>}
-                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-200 text-xs text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subSummary.totalWeight || 0).toFixed(2)}%</div>}
-                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-200 w-20 shrink-0 text-left pl-2 truncate"></div>}
-                                                                {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-200 w-[180px] shrink-0 text-[10px] text-gray-600 font-mono text-left pl-2 truncate">
+                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subSummary.totalCost || 0).toLocaleString()}</div>}
+                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subSummary.totalWeight || 0).toFixed(2)}%</div>}
+                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-20 shrink-0 text-left pl-2 truncate"></div>}
+                                                                {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[150px] shrink-0 text-[10px] text-gray-600 font-mono text-left pl-2 truncate">
                                                                     {subDateRange ? formatDateRange(subDateRange.start, subDateRange.end) : '-'}
                                                                 </div>}
                                                                 {visibleColumns.team && (
                                                                     <div
-                                                                        className="h-full flex items-center justify-center border-l border-gray-200 shrink-0"
+                                                                        className="h-full flex items-center justify-center border-l border-gray-300/40 shrink-0"
                                                                         style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
                                                                     />
                                                                 )}
-                                                                {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-200 text-xs text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subSummary.avgProgress || 0).toFixed(0)}%</div>}
+                                                                {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-300/40 text-xs text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subSummary.avgProgress || 0).toFixed(0)}%</div>}
                                                             </div>
                                                         </div>
 
                                                         {/* Styled Timeline Bar for Subcategory */}
-                                                        <div className="flex-1 h-full relative overflow-hidden bg-white/50">
+                                                        <div className="flex-1 h-full relative overflow-hidden bg-white">
                                                             <div className="absolute inset-0 flex pointer-events-none">
                                                                 {timeline.items.map((item, idx) => (
-                                                                    <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-200/50 h-full ${viewMode === 'day' && isWeekend(item) ? 'bg-gray-50/30' : ''}`}
+                                                                    <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-300/60 h-full ${viewMode === 'day' ? (item.getDay() === 6 ? 'bg-violet-50/35' : item.getDay() === 0 ? 'bg-red-50/35' : '') : ''}`}
                                                                         style={{ width: config.cellWidth }} />
                                                                 ))}
                                                             </div>
@@ -1138,14 +1318,36 @@ export default function GanttChart({
                                             return (
                                                 <div key={row.id}>
                                                     <div
-                                                        className="h-8 flex items-center bg-gray-50/20 border-b border-dotted border-gray-100 group cursor-pointer hover:bg-gray-100/40 transition-colors"
+                                                        className="h-8 flex items-center bg-white border-b border-dotted border-gray-100 group cursor-pointer hover:bg-slate-50 transition-colors"
                                                         onClick={() => toggleSubcategory(uniqueSubsubId)}
-                                                        draggable
+                                                        draggable={enabledGroupDragId === uniqueSubsubId}
                                                         onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubsubId, 'subsubcategory')}
                                                         onDragOver={handleCategoryDragOver}
+                                                        onDrop={(e) => rowDragState
+                                                            ? handleTaskDropToSubsubcategory(e, category, subcat, subsub)
+                                                            : handleSubcategoryDrop(e, uniqueSubsubId)}
+                                                        onDragEnd={() => setEnabledGroupDragId(null)}
                                                     >
-                                                        <div className="sticky left-0 z-[59] flex items-center border-r border-gray-300 pl-2 bg-gray-50"
+                                                        <div className="sticky left-0 z-[59] h-full flex items-center border-r border-gray-300 pl-2 bg-white group-hover:bg-slate-50"
                                                             style={{ width: stickyWidth, minWidth: stickyWidth, paddingLeft: 40 }}>
+                                                            <button
+                                                                type="button"
+                                                                className="cursor-grab text-gray-400 hover:text-gray-600 mr-1"
+                                                                title="ย้ายหมวดย่อยระดับ 3"
+                                                                onMouseDown={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setEnabledGroupDragId(uniqueSubsubId);
+                                                                }}
+                                                                onMouseUp={() => setEnabledGroupDragId(null)}
+                                                                onTouchStart={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setEnabledGroupDragId(uniqueSubsubId);
+                                                                }}
+                                                                onTouchEnd={() => setEnabledGroupDragId(null)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6h8v2H8V6zm0 4h8v2H8v-2zm0 4h8v2H8v-2z" /></svg>
+                                                            </button>
                                                             <button
                                                                 className="w-4 h-4 mr-1 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
                                                                 onClick={(e) => {
@@ -1177,8 +1379,8 @@ export default function GanttChart({
                                                                 title="Change Sub-subcategory Color"
                                                             />
 
-                                                            <div className="flex-1 flex items-center overflow-hidden">
-                                                                <div className="flex-1 flex items-center min-w-0 pr-2">
+                                                            <div className="h-full flex-1 flex items-stretch overflow-hidden">
+                                                                <div className="h-full flex-1 flex items-center min-w-0 pr-2">
                                                                     <span className="text-[11px] text-gray-600 font-bold italic truncate">{subsub}</span>
 
                                                                     {onAddTaskToCategory && (
@@ -1192,27 +1394,27 @@ export default function GanttChart({
                                                                     )}
                                                                 </div>
 
-                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-200 text-[10px] text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subsubSummary.totalCost || 0).toLocaleString()}</div>}
-                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-200 text-[10px] text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subsubSummary.totalWeight || 0).toFixed(2)}%</div>}
-                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-200 w-20 shrink-0 text-left pl-2 truncate"></div>}
-                                                                {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-200 w-[180px] shrink-0 text-[9px] text-gray-500 font-mono text-left pl-2 truncate">
+                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subsubSummary.totalCost || 0).toLocaleString()}</div>}
+                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subsubSummary.totalWeight || 0).toFixed(2)}%</div>}
+                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-20 shrink-0 text-left pl-2 truncate"></div>}
+                                                                {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[150px] shrink-0 text-[9px] text-gray-500 font-mono text-left pl-2 truncate">
                                                                     {subsubDateRange ? formatDateRange(subsubDateRange.start, subsubDateRange.end) : '-'}
                                                                 </div>}
                                                                 {visibleColumns.team && (
                                                                     <div
-                                                                        className="h-full flex items-center justify-center border-l border-gray-200 shrink-0"
+                                                                        className="h-full flex items-center justify-center border-l border-gray-300/40 shrink-0"
                                                                         style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
                                                                     />
                                                                 )}
-                                                                {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-200 text-[10px] text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subsubSummary.avgProgress || 0).toFixed(0)}%</div>}
+                                                                {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-300/40 text-[10px] text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subsubSummary.avgProgress || 0).toFixed(0)}%</div>}
                                                             </div>
                                                         </div>
 
                                                         {/* Timeline Bar for SubSub */}
-                                                        <div className="flex-1 h-full relative overflow-hidden opacity-80">
+                                                        <div className="flex-1 h-full relative overflow-hidden bg-white">
                                                             <div className="absolute inset-0 flex pointer-events-none">
                                                                 {timeline.items.map((item, idx) => (
-                                                                    <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-200/30 h-full ${viewMode === 'day' && isWeekend(item) ? 'bg-gray-50/20' : ''}`}
+                                                                    <div key={idx} className={`flex-shrink-0 border-r border-dashed border-gray-300/60 h-full ${viewMode === 'day' ? (item.getDay() === 6 ? 'bg-violet-50/30' : item.getDay() === 0 ? 'bg-red-50/30' : '') : ''}`}
                                                                         style={{ width: config.cellWidth }} />
                                                                 ))}
                                                             </div>
@@ -1314,7 +1516,7 @@ export default function GanttChart({
                         )}
                         {/* Spacer for other cols */}
                         {visibleColumns.quantity && <div className="w-16 shrink-0" />}
-                        {visibleColumns.period && <div className="w-[180px] shrink-0" />}
+                        {visibleColumns.period && <div className="w-[150px] shrink-0" />}
                         {visibleColumns.team && (
                             <div className="shrink-0" style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }} />
                         )}
