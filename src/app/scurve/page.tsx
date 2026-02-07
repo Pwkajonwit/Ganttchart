@@ -7,8 +7,6 @@ import { Calendar, Loader2, FolderKanban, TrendingUp, BarChart3 } from 'lucide-r
 import Link from 'next/link';
 import { Employee, Project, Task } from '@/types/construction';
 import { getEmployees, getProjects, getTasks } from '@/lib/firestore';
-import { format, isBefore } from 'date-fns';
-import { parseDate } from '@/components/charts/gantt/utils';
 
 export default function SCurvePage() {
     const searchParams = useSearchParams();
@@ -153,34 +151,21 @@ export default function SCurvePage() {
                 </div>
             )}
 
-            {selectedProject && (() => {
-                const minTaskStart = tasks.reduce((min, t) => {
-                    if (!t.planStartDate) return min;
-                    const d = parseDate(t.planStartDate);
-                    if (isNaN(d.getTime())) return min;
-                    return !min || isBefore(d, min) ? d : min;
-                }, null as Date | null);
-
-                const chartStart = minTaskStart
-                    ? format(minTaskStart, 'dd/MM/yyyy')
-                    : selectedProject.startDate;
-
-                return (
-                    <SCurveChart
-                        tasks={tasks}
-                        employees={employees}
-                        startDate={chartStart}
-                        endDate={selectedProject.endDate}
-                        title={selectedProject.name}
-                        onTaskUpdate={async (taskId, field, value) => {
-                            setTasks(prev => prev.map(t =>
-                                t.id === taskId ? { ...t, [field]: value } : t
-                            ));
-                            // TODO: persist to Firestore in next phase
-                        }}
-                    />
-                );
-            })()}
+            {selectedProject && (
+                <SCurveChart
+                    tasks={tasks}
+                    employees={employees}
+                    startDate={selectedProject.startDate}
+                    endDate={selectedProject.endDate}
+                    title={selectedProject.name}
+                    onTaskUpdate={async (taskId, field, value) => {
+                        setTasks(prev => prev.map(t =>
+                            t.id === taskId ? { ...t, [field]: value } : t
+                        ));
+                        // TODO: persist to Firestore in next phase
+                    }}
+                />
+            )}
         </div>
     );
 }
