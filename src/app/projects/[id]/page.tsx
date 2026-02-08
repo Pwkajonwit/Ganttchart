@@ -1207,7 +1207,7 @@ export default function ProjectDetailPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <Link href="/projects" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                         <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -1217,10 +1217,10 @@ export default function ProjectDetailPage() {
                         <p className="text-sm text-gray-500 mt-0.5">{project.description || 'ไม่มีคำอธิบาย'}</p>
                     </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Link
                         href={`/gantt/${projectId}`}
-                        className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
                         title="ไปหน้า Gantt"
                     >
                         <Layers className="w-4 h-4 text-blue-600" />
@@ -1228,7 +1228,7 @@ export default function ProjectDetailPage() {
                     </Link>
                     <Link
                         href={`/scurve/${projectId}`}
-                        className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
                         title="ไปหน้า S-Curve"
                     >
                         <TrendingUp className="w-4 h-4 text-emerald-600" />
@@ -1238,7 +1238,7 @@ export default function ProjectDetailPage() {
                     <div className="flex gap-2">
                         <button
                             onClick={handleDeleteAllTasks}
-                            className="px-3 py-2 bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2 text-sm font-medium"
+                            className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-sm hover:bg-red-100 transition-colors flex items-center gap-2"
                             title="ลบงานทั้งหมด"
                         >
                             <Trash2 className="w-4 h-4" />
@@ -1246,7 +1246,7 @@ export default function ProjectDetailPage() {
                         </button>
                         <button
                             onClick={handleExport}
-                            className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+                            className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
                             title="Export to CSV"
                         >
                             <Download className="w-4 h-4" />
@@ -1254,20 +1254,20 @@ export default function ProjectDetailPage() {
                         </button>
                         <button
                             onClick={handleDownloadTemplate}
-                            className="px-3 py-2 bg-green-50 border border-green-200 text-green-700 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-2 text-sm font-medium"
+                            className="px-3 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-sm hover:bg-green-100 transition-colors flex items-center gap-2"
                             title="ดาวน์โหลดตัวอย่าง CSV"
                         >
                             <Download className="w-4 h-4" />
                             ตัวอย่าง CSV
                         </button>
-                        <label className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium cursor-pointer">
+                        <label className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer">
                             <Upload className="w-4 h-4" />
                             Import
                             <input type="file" accept=".csv" onChange={handleImport} className="hidden" />
                         </label>
                         <button
                             onClick={() => openCreateModal()}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-sm hover:bg-blue-700 transition-colors flex items-center gap-2"
                         >
                             <Plus className="w-4 h-4" />
                             เพิ่มงานใหม่
@@ -1278,61 +1278,61 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Project Overview Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <Target className="w-5 h-5 text-blue-600" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="bg-white rounded-md border border-gray-100 p-2.5 shadow-sm">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-7 h-7 bg-blue-100 rounded-md flex items-center justify-center">
+                            <Target className="w-3.5 h-3.5 text-blue-600" />
                         </div>
                         <div>
                             <p className="text-xs text-gray-500">ความคืบหน้า</p>
-                            <p className="text-xl font-bold text-gray-900">{projectStats.overallProgress.toFixed(1)}%</p>
+                            <p className="text-xl leading-none font-bold text-gray-900">{projectStats.overallProgress.toFixed(1)}%</p>
                         </div>
                     </div>
-                    <div className="mt-3">
+                    <div className="mt-1.5">
                         <ProgressBar value={projectStats.overallProgress} size="md" />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                            <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <div className="bg-white rounded-md border border-gray-100 p-2.5 shadow-sm">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-7 h-7 bg-green-100 rounded-md flex items-center justify-center">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
                         </div>
                         <div>
                             <p className="text-xs text-gray-500">เสร็จสิ้น</p>
-                            <p className="text-xl font-bold text-gray-900">{projectStats.completed}/{projectStats.total}</p>
+                            <p className="text-xl leading-none font-bold text-gray-900">{projectStats.completed}/{projectStats.total}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-amber-600" />
+                <div className="bg-white rounded-md border border-gray-100 p-2.5 shadow-sm">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-7 h-7 bg-amber-100 rounded-md flex items-center justify-center">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
                         </div>
                         <div>
                             <p className="text-xs text-gray-500">กำลังดำเนินการ</p>
-                            <p className="text-xl font-bold text-gray-900">{projectStats.inProgress}</p>
+                            <p className="text-xl leading-none font-bold text-gray-900">{projectStats.inProgress}</p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                            <TrendingUp className="w-5 h-5 text-purple-600" />
+                <div className="bg-white rounded-md border border-gray-100 p-2.5 shadow-sm">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-7 h-7 bg-purple-100 rounded-md flex items-center justify-center">
+                            <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
                         </div>
                         <div>
                             <p className="text-xs text-gray-500">งบประมาณรวม</p>
-                            <p className="text-xl font-bold text-gray-900">{projectStats.totalCost.toLocaleString()}</p>
+                            <p className="text-xl leading-none font-bold text-gray-900">{projectStats.totalCost.toLocaleString()}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Task Table */}
-            <div className="bg-white rounded-xl border border-gray-300 overflow-visible">
+            <div className="bg-white rounded-lg border border-gray-100 overflow-visible shadow-sm">
                 <div className="px-4 py-3 border-b border-gray-200 bg-slate-50 flex items-center justify-between">
                     <h2 className="font-semibold text-gray-900 flex items-center gap-2">
                         <ListTodo className="w-5 h-5 text-blue-600" />
@@ -1342,7 +1342,7 @@ export default function ProjectDetailPage() {
                         <button
                             type="button"
                             onClick={() => setIsColumnMenuOpen(prev => !prev)}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50"
                         >
                             <Settings2 className="w-4 h-4" />
                             คอลัมน์

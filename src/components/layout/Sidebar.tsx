@@ -33,6 +33,7 @@ const navigation: NavItem[] = [
     { name: 'รายการงาน', href: '/tasks', icon: ListTodo },
     { name: 'พนักงาน', href: '/employees', icon: Users },
     { name: 'รายงาน', href: '/reports', icon: FileSpreadsheet },
+    { name: 'Convert CSV', href: '/convert-csv', icon: CalendarDays },
     { name: 'ตั้งค่า', href: '/settings', icon: Settings },
 ];
 
