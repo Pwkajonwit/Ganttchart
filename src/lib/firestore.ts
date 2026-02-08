@@ -11,7 +11,8 @@ import {
     orderBy,
     Timestamp,
     serverTimestamp,
-    writeBatch
+    writeBatch,
+    setDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Project, Task, WeeklyLog, Member, Employee } from '@/types/construction';
@@ -628,4 +629,56 @@ export async function seedMembers(): Promise<void> {
     }
 
     console.log('Default members seeded successfully');
+}
+
+// ==================== CSV TEMPLATE ====================
+
+export interface CsvTemplateDoc {
+    userId: string;
+    name: string;
+    data: Record<string, unknown>;
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
+}
+
+const encodeTemplateDocId = (name: string) => encodeURIComponent(name);
+
+export async function getCsvTemplates(userId: string): Promise<Record<string, Record<string, unknown>>> {
+    const templatesRef = collection(db, 'members', userId, 'csvTemplates');
+    const snapshot = await getDocs(templatesRef);
+
+    const result: Record<string, Record<string, unknown>> = {};
+    snapshot.docs.forEach((docSnap) => {
+        const payload = docSnap.data() as CsvTemplateDoc;
+        if (payload?.name && payload?.data && typeof payload.data === 'object') {
+            result[payload.name] = payload.data;
+        }
+    });
+
+    return result;
+}
+
+export async function saveCsvTemplate(
+    userId: string,
+    name: string,
+    data: Record<string, unknown>
+): Promise<void> {
+    const cleanedName = name.trim();
+    if (!cleanedName) throw new Error('Template name is required');
+
+    const templateRef = doc(db, 'members', userId, 'csvTemplates', encodeTemplateDocId(cleanedName));
+    await setDoc(templateRef, {
+        userId,
+        name: cleanedName,
+        data: removeUndefined(data),
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+    }, { merge: true });
+}
+
+export async function deleteCsvTemplate(userId: string, name: string): Promise<void> {
+    const cleanedName = name.trim();
+    if (!cleanedName) return;
+    const templateRef = doc(db, 'members', userId, 'csvTemplates', encodeTemplateDocId(cleanedName));
+    await deleteDoc(templateRef);
 }
