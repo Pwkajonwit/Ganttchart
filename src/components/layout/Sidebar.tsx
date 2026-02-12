@@ -1,7 +1,8 @@
-﻿'use client';
+'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
     LayoutDashboard,
@@ -29,29 +30,92 @@ interface NavItem {
 
 const navigation: NavItem[] = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'โครงการ', href: '/projects', icon: FolderKanban },
-    { name: 'รายการงาน', href: '/tasks', icon: ListTodo },
-    { name: 'พนักงาน', href: '/employees', icon: Users },
-    { name: 'รายงาน', href: '/reports', icon: FileSpreadsheet },
+    { name: 'Projects', href: '/projects', icon: FolderKanban },
+    { name: 'Tasks', href: '/tasks', icon: ListTodo },
+    { name: 'Procurement', href: '/procurement', icon: BarChart3 },
+    { name: 'Employees', href: '/employees', icon: Users },
+    { name: 'Reports', href: '/reports', icon: FileSpreadsheet },
     { name: 'Convert CSV', href: '/convert-csv', icon: CalendarDays },
-    { name: 'ตั้งค่า', href: '/settings', icon: Settings },
+    { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export default function Sidebar() {
     const pathname = usePathname();
     const { collapsed, toggleCollapsed } = useSidebar();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [brandName, setBrandName] = useState('Powertec');
+    const [brandLogoBase64, setBrandLogoBase64] = useState('');
 
-    const NavContent = () => (
+    const activeHref = useMemo(() => {
+        const matches = navigation
+            .map((item) => {
+                const isMatch = item.href === '/'
+                    ? pathname === '/'
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                return isMatch ? item.href : null;
+            })
+            .filter((value): value is string => value !== null);
+
+        if (matches.length === 0) return null;
+        return matches.sort((a, b) => b.length - a.length)[0];
+    }, [pathname]);
+
+    useEffect(() => {
+        const loadBranding = () => {
+            try {
+                const stored = localStorage.getItem('srt-hst-settings');
+                if (!stored) {
+                    setBrandName('Powertec');
+                    setBrandLogoBase64('');
+                    return;
+                }
+
+                const parsed = JSON.parse(stored) as {
+                    company?: {
+                        name?: string;
+                        logoBase64?: string;
+                    };
+                };
+
+                setBrandName(parsed.company?.name?.trim() || 'Powertec');
+                setBrandLogoBase64(parsed.company?.logoBase64 || '');
+            } catch {
+                setBrandName('Powertec');
+                setBrandLogoBase64('');
+            }
+        };
+
+        const handleSettingsUpdate = () => loadBranding();
+        loadBranding();
+        window.addEventListener('storage', handleSettingsUpdate);
+        window.addEventListener('srt-hst-settings-updated', handleSettingsUpdate);
+        return () => {
+            window.removeEventListener('storage', handleSettingsUpdate);
+            window.removeEventListener('srt-hst-settings-updated', handleSettingsUpdate);
+        };
+    }, []);
+
+    const navContent = (
         <div className="flex flex-col h-full">
             {/* Logo */}
             <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-200">
-                <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <Building2 className="w-5 h-5 text-white" />
+                <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden relative">
+                    {brandLogoBase64 ? (
+                        <Image
+                            src={brandLogoBase64}
+                            alt={brandName}
+                            fill
+                            unoptimized
+                            sizes="36px"
+                            className="object-cover"
+                        />
+                    ) : (
+                        <Building2 className="w-5 h-5 text-white" />
+                    )}
                 </div>
                 {!collapsed && (
                     <div>
-                        <h1 className="text-gray-900 font-semibold text-base">SRT-HST</h1>
+                        <h1 className="text-gray-900 font-semibold text-base">{brandName}</h1>
                         <p className="text-gray-600 text-xs">Construction MS</p>
                     </div>
                 )}
@@ -60,7 +124,7 @@ export default function Sidebar() {
             {/* Navigation */}
             <nav className="flex-1 p-3 space-y-3 overflow-y-auto">
                 {navigation.map((item) => {
-                    const isActive = pathname === item.href;
+                    const isActive = item.href === activeHref;
                     return (
                         <Link
                             key={item.name}
@@ -95,7 +159,7 @@ export default function Sidebar() {
                     ) : (
                         <>
                             <ChevronLeft className="w-4 h-4" />
-                            <span>ย่อเมนู</span>
+                            <span>Collapse</span>
                         </>
                     )}
                 </button>
@@ -126,7 +190,7 @@ export default function Sidebar() {
                 'hidden lg:block fixed left-0 top-0 h-screen bg-white border-r border-gray-200 transition-all duration-200 z-40',
                 collapsed ? 'w-16' : 'w-56'
             )}>
-                <NavContent />
+                {navContent}
             </aside>
 
             {/* Mobile Sidebar */}
@@ -134,7 +198,7 @@ export default function Sidebar() {
                 'lg:hidden fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 transition-transform duration-200 z-50',
                 mobileOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
-                <NavContent />
+                {navContent}
             </aside>
         </>
     );

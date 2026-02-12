@@ -1,28 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
     Settings,
     User,
+    Building2,
     Bell,
-    Shield,
     Database,
-    Palette,
-    Globe,
-    Mail,
-    Smartphone,
-    Key,
     Users,
     Save,
-    Camera,
     Check,
     Loader2,
     Upload,
     Download,
     Trash2,
     FileSpreadsheet,
-    Plus,
     X,
     UserPlus,
     Edit2,
@@ -35,7 +29,7 @@ import { getProjects, getAllTasks, seedSampleData, addProject, addTask, clearAll
 import { Task, Project, Member } from '@/types/construction';
 import { useAuth } from '@/contexts/AuthContext';
 
-type TabType = 'profile' | 'members' | 'system';
+type TabType = 'profile' | 'notifications' | 'company' | 'members' | 'system';
 
 interface UserSettings {
     profile: {
@@ -55,6 +49,13 @@ interface UserSettings {
         newComment: boolean;
         reportComplete: boolean;
         deadline: boolean;
+        lineEnabled: boolean;
+        lineProvider: 'line-notify' | 'line-messaging-api';
+        lineToken: string;
+        lineGroupId: string;
+        lineGroupName: string;
+        lineChannelAccessToken: string;
+        lineUserId: string;
     };
     appearance: {
         theme: 'light' | 'dark' | 'system';
@@ -64,6 +65,7 @@ interface UserSettings {
     company: {
         name: string;
         taxId: string;
+        logoBase64: string;
     };
 }
 
@@ -84,7 +86,14 @@ const defaultSettings: UserSettings = {
         progressUpdate: true,
         newComment: true,
         reportComplete: false,
-        deadline: true
+        deadline: true,
+        lineEnabled: false,
+        lineProvider: 'line-notify',
+        lineToken: '',
+        lineGroupId: '',
+        lineGroupName: '',
+        lineChannelAccessToken: '',
+        lineUserId: ''
     },
     appearance: {
         theme: 'light',
@@ -93,9 +102,31 @@ const defaultSettings: UserSettings = {
     },
     company: {
         name: 'SRT-HST Construction Co., Ltd.',
-        taxId: '0105562012345'
+        taxId: '0105562012345',
+        logoBase64: ''
     }
 };
+
+const mergeSettingsWithDefault = (stored: Partial<UserSettings>): UserSettings => ({
+    ...defaultSettings,
+    ...stored,
+    profile: {
+        ...defaultSettings.profile,
+        ...(stored.profile || {})
+    },
+    notifications: {
+        ...defaultSettings.notifications,
+        ...(stored.notifications || {})
+    },
+    appearance: {
+        ...defaultSettings.appearance,
+        ...(stored.appearance || {})
+    },
+    company: {
+        ...defaultSettings.company,
+        ...(stored.company || {})
+    }
+});
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -133,18 +164,7 @@ export default function SettingsPage() {
     const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', role: 'viewer' as Member['role'] });
     const [savingMember, setSavingMember] = useState(false);
 
-    // Load settings from localStorage and fetch members
-    useEffect(() => {
-        const savedSettings = localStorage.getItem('srt-hst-settings');
-        if (savedSettings) {
-            setSettings(JSON.parse(savedSettings));
-        }
-        fetchStats();
-        fetchMembers();
-        setLoading(false);
-    }, []);
-
-    const fetchStats = async () => {
+    const fetchStats = useCallback(async () => {
         try {
             const [projects, tasks] = await Promise.all([
                 getProjects(),
@@ -154,9 +174,9 @@ export default function SettingsPage() {
         } catch (error) {
             console.error('Error fetching stats:', error);
         }
-    };
+    }, []);
 
-    const fetchMembers = async () => {
+    const fetchMembers = useCallback(async () => {
         try {
             const membersData = await getMembers();
             setMembers(membersData);
@@ -193,13 +213,31 @@ export default function SettingsPage() {
         } catch (error) {
             console.error('Error fetching members:', error);
         }
-    };
+    }, [currentMemberId, settings.profile.email]);
+
+    // Load settings from localStorage and fetch members
+    useEffect(() => {
+        const savedSettings = localStorage.getItem('srt-hst-settings');
+        if (savedSettings) {
+            try {
+                const parsed = JSON.parse(savedSettings) as Partial<UserSettings>;
+                setSettings(mergeSettingsWithDefault(parsed));
+            } catch (error) {
+                console.error('Failed to parse settings:', error);
+                setSettings(defaultSettings);
+            }
+        }
+        fetchStats();
+        fetchMembers();
+        setLoading(false);
+    }, [fetchStats, fetchMembers]);
 
     const handleSave = async () => {
         setSaving(true);
         try {
             // 1. Save local settings
             localStorage.setItem('srt-hst-settings', JSON.stringify(settings));
+            window.dispatchEvent(new CustomEvent('srt-hst-settings-updated'));
 
             // 2. Update real member data if linked
             if (currentMemberId) {
@@ -235,16 +273,53 @@ export default function SettingsPage() {
         setSettings(prev => ({ ...prev, profile: { ...prev.profile, [field]: value } }));
     };
 
-    const updateNotification = (field: keyof UserSettings['notifications'], value: boolean) => {
+    const updateNotification = <K extends keyof UserSettings['notifications']>(
+        field: K,
+        value: UserSettings['notifications'][K]
+    ) => {
         setSettings(prev => ({ ...prev, notifications: { ...prev.notifications, [field]: value } }));
-    };
-
-    const updateAppearance = (field: keyof UserSettings['appearance'], value: string) => {
-        setSettings(prev => ({ ...prev, appearance: { ...prev.appearance, [field]: value } }));
     };
 
     const updateCompany = (field: keyof UserSettings['company'], value: string) => {
         setSettings(prev => ({ ...prev, company: { ...prev.company, [field]: value } }));
+    };
+
+    const handleCompanyLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            setAlertDialog({
+                isOpen: true,
+                title: 'ข้อผิดพลาด',
+                message: 'กรุณาเลือกไฟล์รูปภาพเท่านั้น',
+                type: 'error',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+            e.target.value = '';
+            return;
+        }
+
+        try {
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            updateCompany('logoBase64', base64);
+        } catch (error) {
+            console.error('Error converting logo to base64:', error);
+            setAlertDialog({
+                isOpen: true,
+                title: 'ข้อผิดพลาด',
+                message: 'ไม่สามารถแปลงไฟล์โลโก้ได้',
+                type: 'error',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally {
+            e.target.value = '';
+        }
     };
 
     const handleLogout = async () => {
@@ -335,10 +410,10 @@ export default function SettingsPage() {
                     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
                     // Parse data rows
-                    const data: any[] = [];
+                    const data: Record<string, string>[] = [];
                     for (let i = 1; i < lines.length; i++) {
                         const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-                        const row: any = {};
+                        const row: Record<string, string> = {};
                         headers.forEach((header, idx) => {
                             row[header] = values[idx] || '';
                         });
@@ -371,14 +446,14 @@ export default function SettingsPage() {
                         const category = row['Category'] || row['category'] || row['No.'] ? `Group ${row['No.']}` : 'Imported Tasks';
 
                         // Date Parsing
-                        const parseDate = (val: any) => {
+                        const parseDate = (val: unknown) => {
                             if (!val) return null;
-                            const d = new Date(val);
+                            const d = new Date(String(val));
                             return isNaN(d.getTime()) ? null : d;
                         };
 
-                        let start = parseDate(row['Start'] || row['planStartDate'] || row['StartDate']) || new Date();
-                        let end = parseDate(row['End'] || row['planEndDate'] || row['EndDate']) || new Date();
+                        const start = parseDate(row['Start'] || row['planStartDate'] || row['StartDate']) || new Date();
+                        const end = parseDate(row['End'] || row['planEndDate'] || row['EndDate']) || new Date();
 
                         if (start < minDate) minDate = start;
                         if (end > maxDate) maxDate = end;
@@ -659,8 +734,24 @@ export default function SettingsPage() {
         return <span className={`px-2 py-0.5 text-xs font-medium rounded-sm ${config.class}`}>{config.label}</span>;
     };
 
+    const notificationToggleItems: Array<{
+        key: 'email' | 'push' | 'sms' | 'taskDelay' | 'progressUpdate' | 'newComment' | 'reportComplete' | 'deadline';
+        label: string;
+    }> = [
+            { key: 'email', label: 'อีเมล' },
+            { key: 'push', label: 'Push Notification' },
+            { key: 'sms', label: 'SMS' },
+            { key: 'taskDelay', label: 'แจ้งเตือนงานล่าช้า' },
+            { key: 'progressUpdate', label: 'แจ้งเตือนอัปเดตความคืบหน้า' },
+            { key: 'newComment', label: 'แจ้งเตือนคอมเมนต์ใหม่' },
+            { key: 'reportComplete', label: 'แจ้งเตือนรายงานเสร็จสิ้น' },
+            { key: 'deadline', label: 'แจ้งเตือนใกล้กำหนดส่ง' }
+        ];
+
     const allTabs = [
         { id: 'profile', label: 'โปรไฟล์', icon: User, roles: ['admin', 'project_manager', 'engineer', 'viewer'] },
+        { id: 'notifications', label: 'การแจ้งเตือน', icon: Bell, roles: ['admin', 'project_manager', 'engineer', 'viewer'] },
+        { id: 'company', label: 'บริษัท', icon: Building2, roles: ['admin'] },
         { id: 'members', label: 'สมาชิก', icon: Users, roles: ['admin'] },
         { id: 'system', label: 'ระบบ', icon: Database, roles: ['admin'] },
     ];
@@ -779,6 +870,193 @@ export default function SettingsPage() {
                         </div>
                     )}
 
+                    {activeTab === 'notifications' && (
+                        <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
+                            <div>
+                                <h2 className="text-lg font-semibold text-gray-900">ตั้งค่าการแจ้งเตือน</h2>
+                                <p className="text-gray-500 text-sm mt-0.5">กำหนดช่องทางแจ้งเตือน และตั้งค่า LINE สำหรับพัฒนาต่อในอนาคต</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-semibold text-gray-900">ช่องทางแจ้งเตือนทั่วไป</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {notificationToggleItems.map((item) => (
+                                        <label key={item.key} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-sm">
+                                            <span className="text-sm text-gray-700">{item.label}</span>
+                                            <input
+                                                type="checkbox"
+                                                checked={settings.notifications[item.key]}
+                                                onChange={(e) => updateNotification(item.key, e.target.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 pt-4 border-t border-gray-100">
+                                <h3 className="text-sm font-semibold text-gray-900">LINE Integration (รองรับการพัฒนาต่อ)</h3>
+
+                                <label className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-sm">
+                                    <span className="text-sm text-gray-700">เปิดใช้งานแจ้งเตือนผ่าน LINE</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.notifications.lineEnabled}
+                                        onChange={(e) => updateNotification('lineEnabled', e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                </label>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">ผู้ให้บริการ LINE</label>
+                                        <select
+                                            value={settings.notifications.lineProvider}
+                                            onChange={(e) => updateNotification('lineProvider', e.target.value as UserSettings['notifications']['lineProvider'])}
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        >
+                                            <option value="line-notify">LINE Notify (Legacy)</option>
+                                            <option value="line-messaging-api">LINE Messaging API</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE Group ID</label>
+                                        <input
+                                            type="text"
+                                            value={settings.notifications.lineGroupId}
+                                            onChange={(e) => updateNotification('lineGroupId', e.target.value)}
+                                            placeholder="เช่น Cxxxxxxxxxxxxxxxx"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE Group Name (อ้างอิง)</label>
+                                        <input
+                                            type="text"
+                                            value={settings.notifications.lineGroupName}
+                                            onChange={(e) => updateNotification('lineGroupName', e.target.value)}
+                                            placeholder="เช่น Site Project A"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE Token</label>
+                                        <input
+                                            type="password"
+                                            value={settings.notifications.lineToken}
+                                            onChange={(e) => updateNotification('lineToken', e.target.value)}
+                                            placeholder="ใส่ LINE token"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Channel Access Token (Future)</label>
+                                        <input
+                                            type="password"
+                                            value={settings.notifications.lineChannelAccessToken}
+                                            onChange={(e) => updateNotification('lineChannelAccessToken', e.target.value)}
+                                            placeholder="ใช้สำหรับ LINE Messaging API ในอนาคต"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE User/Group Target ID (Future)</label>
+                                        <input
+                                            type="text"
+                                            value={settings.notifications.lineUserId}
+                                            onChange={(e) => updateNotification('lineUserId', e.target.value)}
+                                            placeholder="เช่น Uxxxxxxxx หรือ Cxxxxxxxx"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-sm p-3">
+                                    ฟิลด์ชุดนี้ถูกออกแบบไว้เพื่อรองรับการพัฒนาต่อไป เช่น เชื่อมต่อ LINE Messaging API, ส่งแจ้งเตือนรายงานอัตโนมัติ และกำหนดกลุ่มเป้าหมายรายโครงการ
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'company' && (
+                        <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
+                            <div>
+                                <h2 className="text-lg font-semibold text-gray-900">ข้อมูลบริษัท</h2>
+                                <p className="text-gray-500 text-sm mt-0.5">ตั้งค่าชื่อบริษัท เลขประจำตัวผู้เสียภาษี และโลโก้</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">ชื่อบริษัท</label>
+                                        <input
+                                            type="text"
+                                            value={settings.company.name}
+                                            onChange={(e) => updateCompany('name', e.target.value)}
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">เลขประจำตัวผู้เสียภาษี</label>
+                                        <input
+                                            type="text"
+                                            value={settings.company.taxId}
+                                            onChange={(e) => updateCompany('taxId', e.target.value)}
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">อัปโหลดโลโก้ (บันทึกเป็น Base64)</label>
+                                        <label className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-200 rounded-sm hover:bg-blue-50 cursor-pointer">
+                                            <Upload className="w-4 h-4" />
+                                            เลือกรูปภาพ
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleCompanyLogoUpload}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <label className="block text-sm font-medium text-gray-700">ตัวอย่างโลโก้</label>
+                                    <div className="h-40 w-full border border-dashed border-gray-300 rounded-sm bg-gray-50 flex items-center justify-center overflow-hidden relative">
+                                        {settings.company.logoBase64 ? (
+                                            <Image
+                                                src={settings.company.logoBase64}
+                                                alt="Company logo preview"
+                                                fill
+                                                unoptimized
+                                                sizes="(max-width: 768px) 100vw, 40vw"
+                                                className="object-contain"
+                                            />
+                                        ) : (
+                                            <div className="text-gray-400 text-sm text-center px-4">
+                                                ยังไม่ได้อัปโหลดโลโก้
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateCompany('logoBase64', '')}
+                                        className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-sm hover:bg-red-50"
+                                        disabled={!settings.company.logoBase64}
+                                    >
+                                        ลบโลโก้
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
+                    )}
+
                     {activeTab === 'system' && (
                         <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
                             <div>
@@ -872,7 +1150,7 @@ export default function SettingsPage() {
                     )}
 
                     {/* Placeholder for other tabs to keep layout intact if user clicks them */}
-                    {activeTab !== 'profile' && activeTab !== 'system' && activeTab !== 'members' && (
+                    {activeTab !== 'profile' && activeTab !== 'notifications' && activeTab !== 'company' && activeTab !== 'system' && activeTab !== 'members' && (
                         <div className="bg-white rounded-sm border border-gray-300 p-10 flex flex-col items-center text-center text-gray-500">
                             <Settings className="w-10 h-10 mb-4 text-gray-300" />
                             <p>ส่วนนี้ยังไม่เปิดให้แก้ไขในเวอร์ชัน Demo</p>

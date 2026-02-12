@@ -338,12 +338,17 @@ export default function ProjectDetailPage() {
         };
     };
 
+    const getEffectiveStatus = (task: Task): Task['status'] => {
+        if ((task.progress || 0) >= 100) return 'completed';
+        return task.status || 'not-started';
+    };
+
     // Project Stats
     const projectStats = useMemo(() => {
         const total = tasks.length;
-        const completed = tasks.filter(t => t.status === 'completed').length;
-        const inProgress = tasks.filter(t => t.status === 'in-progress').length;
-        const notStarted = tasks.filter(t => t.status === 'not-started').length;
+        const completed = tasks.filter(t => getEffectiveStatus(t) === 'completed').length;
+        const inProgress = tasks.filter(t => getEffectiveStatus(t) === 'in-progress').length;
+        const notStarted = tasks.filter(t => getEffectiveStatus(t) === 'not-started').length;
 
         let totalDuration = 0;
         let weightedProgress = 0;
@@ -579,7 +584,7 @@ export default function ProjectDetailPage() {
                 if (sourceCat === targetCat) return;
 
                 const allCats = Object.keys(hierarchicalData);
-                let currentOrder = categoryOrder.length > 0 ? [...categoryOrder] : [...allCats];
+                const currentOrder = categoryOrder.length > 0 ? [...categoryOrder] : [...allCats];
 
                 // Ensure all are present
                 allCats.forEach(c => {
@@ -715,7 +720,7 @@ export default function ProjectDetailPage() {
             // Note: If orders are equal or not set, we might need a more robust re-indexing strategy.
             // But assuming unique orders or at least sortable, swapping values generally works to swap positions.
             // If they have same order value, swapping does nothing. Maximize difference.
-            let taskOrder = task.order || 0;
+            const taskOrder = task.order || 0;
             let targetOrder = targetTask.order || 0;
 
             if (taskOrder === targetOrder) {
@@ -799,7 +804,7 @@ export default function ProjectDetailPage() {
             `"${(t.quantity || '').replace(/"/g, '""')}"`,
             `"${(t.responsible || '').replace(/"/g, '""')}"`,
             t.progress || 0,
-            t.status || 'not-started',
+            getEffectiveStatus(t),
             formatDateForCSV(t.actualStartDate),
             formatDateForCSV(t.actualEndDate)
         ]);
@@ -893,6 +898,15 @@ export default function ProjectDetailPage() {
                     } catch { }
                 }
 
+                const importedProgress = parseFloat((row['Progress'] || row['Progress (%)'] || row['ความคืบหน้า'] || '0').replace('%', ''));
+                const rawImportedStatus = (row['Status'] || 'not-started').toLowerCase();
+                const normalizedStatus: Task['status'] =
+                    importedProgress >= 100
+                        ? 'completed'
+                        : rawImportedStatus === 'completed' || rawImportedStatus === 'in-progress' || rawImportedStatus === 'delayed' || rawImportedStatus === 'not-started'
+                            ? rawImportedStatus
+                            : 'not-started';
+
                 newTasks.push({
                     projectId,
                     category,
@@ -906,8 +920,8 @@ export default function ProjectDetailPage() {
                     planStartDate: pStart,
                     planEndDate: pEnd,
                     planDuration: duration || pStart && pEnd ? calcDuration(pStart, pEnd) : 1,
-                    progress: parseFloat((row['Progress'] || row['Progress (%)'] || row['ความคืบหน้า'] || '0').replace('%', '')),
-                    status: (row['Status'] || 'not-started').toLowerCase(),
+                    progress: importedProgress,
+                    status: normalizedStatus,
                     order: ++orderCounter,
                     actualStartDate: fixDate(row['Actual Start'] || ''),
                     actualEndDate: fixDate(row['Actual End'] || '')
@@ -1207,17 +1221,22 @@ export default function ProjectDetailPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-1 items-start gap-4">
                     <Link href="/projects" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                         <ArrowLeft className="w-5 h-5 text-gray-600" />
                     </Link>
-                    <div>
+                    <div className="min-w-0">
                         <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-                        <p className="text-sm text-gray-500 mt-0.5">{project.description || 'ไม่มีคำอธิบาย'}</p>
+                        <p
+                            className="mt-0.5 max-w-[900px] truncate text-sm text-gray-500"
+                            title={project.description || 'No description'}
+                        >
+                            {project.description || '\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22'}
+                        </p>
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5 sm:ml-auto sm:justify-end">
                     <Link
                         href={`/gantt/${projectId}`}
                         className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
@@ -1448,9 +1467,19 @@ export default function ProjectDetailPage() {
                                                     <td className="px-2 py-3 text-center cursor-move text-gray-300 hover:text-gray-500" onClick={(e) => e.stopPropagation()}>
                                                         {canEdit && <GripVertical className="w-4 h-4 mx-auto" />}
                                                     </td>
-                                                    <td className="min-w-[360px] px-4 py-3 cursor-pointer sticky left-0 z-20 bg-inherit" onClick={() => toggleCategory(category)}>
+                                                    <td className="min-w-[360px] px-4 py-3 sticky left-0 z-20 bg-inherit">
                                                         <div className="flex items-center gap-2">
-                                                            {isCatCollapsed ? <ChevronRight className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                                                            <button
+                                                                type="button"
+                                                                className="p-0.5 rounded-sm text-gray-500 hover:bg-gray-100"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleCategory(category);
+                                                                }}
+                                                                title={isCatCollapsed ? 'Expand category' : 'Collapse category'}
+                                                            >
+                                                                {isCatCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                            </button>
                                                             <button
                                                                 type="button"
                                                                 className="w-3 h-3 rounded-full border border-white/80 shadow-sm hover:scale-110 transition-transform"
@@ -1515,8 +1544,7 @@ export default function ProjectDetailPage() {
                                                                 <React.Fragment key={uniqueSubcatId}>
                                                                     {/* Level 2: Subcategory Row */}
                                                                     <tr
-                                                                        className="bg-slate-50 hover:bg-slate-100 cursor-pointer"
-                                                                        onClick={() => toggleSubcategory(uniqueSubcatId)}
+                                                                        className="bg-slate-50 hover:bg-slate-100"
                                                                         onDragOver={handleDragOver}
                                                                         onDrop={(e) => handleDrop(e, uniqueSubcatId)}
                                                                     >
@@ -1525,7 +1553,17 @@ export default function ProjectDetailPage() {
                                                                         </td>
                                                                         <td className="min-w-[360px] px-4 py-2 pl-10 sticky left-0 z-20 bg-inherit">
                                                                             <div className="flex items-center gap-2">
-                                                                                {isSubCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="p-0.5 rounded-sm text-gray-500 hover:bg-gray-200"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        toggleSubcategory(uniqueSubcatId);
+                                                                                    }}
+                                                                                    title={isSubCollapsed ? 'Expand subcategory' : 'Collapse subcategory'}
+                                                                                >
+                                                                                    {isSubCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                                                </button>
                                                                                 <button
                                                                                     type="button"
                                                                                     className="w-2.5 h-2.5 rounded-full border border-white/80 shadow-sm hover:scale-110 transition-transform"
@@ -1588,8 +1626,7 @@ export default function ProjectDetailPage() {
                                                                                     <React.Fragment key={subsub}>
                                                                                         {/* Level 3 Group Row */}
                                                                                         <tr
-                                                                                            className="hover:bg-slate-50 cursor-pointer transition-colors"
-                                                                                            onClick={() => toggleSubSubcategory(uniqueSubsubId)}
+                                                                                            className="hover:bg-slate-50 transition-colors"
                                                                                             onDragOver={handleDragOver}
                                                                                             onDrop={(e) => handleDrop(e, uniqueSubsubId)}
                                                                                         >
@@ -1598,7 +1635,17 @@ export default function ProjectDetailPage() {
                                                                                             </td>
                                                                                             <td className="min-w-[360px] px-4 py-2 pl-16 sticky left-0 z-20 bg-inherit">
                                                                                                 <div className="flex items-center gap-2">
-                                                                                                    {isSubSubCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        className="p-0.5 rounded-sm text-gray-500 hover:bg-gray-100"
+                                                                                                        onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            toggleSubSubcategory(uniqueSubsubId);
+                                                                                                        }}
+                                                                                                        title={isSubSubCollapsed ? 'Expand sub-subcategory' : 'Collapse sub-subcategory'}
+                                                                                                    >
+                                                                                                        {isSubSubCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                                                                    </button>
                                                                                                     <button
                                                                                                         type="button"
                                                                                                         className="w-2.5 h-2.5 rounded-full border border-white/80 shadow-sm hover:scale-110 transition-transform"
@@ -1679,7 +1726,7 @@ export default function ProjectDetailPage() {
                                                                                                         <div className="text-sm font-semibold text-gray-800 tabular-nums text-right">{task.progress}%</div>
                                                                                                     </td>
                                                                                                 )}
-                                                                                                {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(task.status)}</td>}
+                                                                                                {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(getEffectiveStatus(task))}</td>}
                                                                                                 {visibleColumns.actions && (
                                                                                                     <td className="px-3 py-1.5 sticky right-0 z-20 bg-inherit border-l border-gray-200">
                                                                                                         <div className="flex items-center justify-center gap-1">
@@ -1732,7 +1779,7 @@ export default function ProjectDetailPage() {
                                                                                             <div className="text-sm font-semibold text-gray-800 tabular-nums text-right">{task.progress}%</div>
                                                                                         </td>
                                                                                     )}
-                                                                                    {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(task.status)}</td>}
+                                                                                    {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(getEffectiveStatus(task))}</td>}
                                                                                     {visibleColumns.actions && (
                                                                                         <td className="px-3 py-1.5 sticky right-0 z-20 bg-inherit border-l border-gray-200">
                                                                                             <div className="flex items-center justify-center gap-1">
@@ -1787,7 +1834,7 @@ export default function ProjectDetailPage() {
                                                                         </div>
                                                                     </td>
                                                                 )}
-                                                                {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(task.status)}</td>}
+                                                                {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(getEffectiveStatus(task))}</td>}
                                                                 {visibleColumns.actions && (
                                                                     <td className="px-3 py-1.5 sticky right-0 z-20 bg-inherit border-l border-gray-200">
                                                                         <div className="flex items-center justify-center gap-1">
@@ -2100,7 +2147,7 @@ export default function ProjectDetailPage() {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Progress (%)</label>
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex min-w-0 flex-1 items-start gap-4">
                                         <input
                                             type="range"
                                             min="0"
