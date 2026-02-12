@@ -94,7 +94,7 @@ export default function GanttChart({
     useEffect(() => {
         if (!scrollContainerRef.current) return;
         const resizeObserver = new ResizeObserver(entries => {
-            for (let entry of entries) {
+            for (const entry of entries) {
                 if (entry.contentRect.width > 0) setContainerWidth(entry.contentRect.width);
             }
         });
@@ -332,7 +332,7 @@ export default function GanttChart({
                 return;
             }
             const allCats = Object.keys(groupedTasks);
-            let currentOrder = categoryOrder.length > 0 ? [...categoryOrder] : [...allCats];
+            const currentOrder = categoryOrder.length > 0 ? [...categoryOrder] : [...allCats];
             // Ensure all existing categories are in the order array
             allCats.forEach(c => { if (!currentOrder.includes(c)) currentOrder.push(c); });
 
@@ -1241,8 +1241,7 @@ export default function GanttChart({
                                                 <div key={row.id}>
                                                     {/* Subcategory Header */}
                                                     <div
-                                                        className={`flex bg-white border-b border-dashed border-gray-200 h-8 group cursor-pointer hover:bg-slate-50 transition-colors ${categoryDragState?.id === uniqueSubcatId && categoryDragState?.type === 'subcategory' ? 'opacity-40 bg-blue-50' : ''}`}
-                                                        onClick={() => toggleSubcategory(uniqueSubcatId)}
+                                                        className={`flex bg-white border-b border-dashed border-gray-200 h-8 group hover:bg-slate-50 transition-colors ${categoryDragState?.id === uniqueSubcatId && categoryDragState?.type === 'subcategory' ? 'opacity-40 bg-blue-50' : ''}`}
                                                         draggable={enabledGroupDragId === uniqueSubcatId}
                                                         onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubcatId, 'subcategory')}
                                                         onDragOver={handleCategoryDragOver}
@@ -1400,8 +1399,7 @@ export default function GanttChart({
                                             return (
                                                 <div key={row.id}>
                                                     <div
-                                                        className="h-8 flex items-center bg-white border-b border-dotted border-gray-100 group cursor-pointer hover:bg-slate-50 transition-colors"
-                                                        onClick={() => toggleSubcategory(uniqueSubsubId)}
+                                                        className="h-8 flex items-center bg-white border-b border-dotted border-gray-100 group hover:bg-slate-50 transition-colors"
                                                         draggable={enabledGroupDragId === uniqueSubsubId}
                                                         onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubsubId, 'subsubcategory')}
                                                         onDragOver={handleCategoryDragOver}

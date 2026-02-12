@@ -47,7 +47,7 @@ export interface Task {
     dueProcurementDate?: string;
     dueMaterialOnSiteDate?: string;
     dateOfUse?: string;
-    procurementStatus?: 'to-order' | 'ordered' | 'delivered' | 'ready' | 'plan-a' | 'plan-b' | 'plan-c' | 'actual';
+    procurementStatus?: 'to-order' | 'ordered' | 'delivered' | 'ready' | 'in-stock' | 'plan-a' | 'plan-b' | 'plan-c' | 'actual';
     createdAt: string;
     updatedAt: string;
 }

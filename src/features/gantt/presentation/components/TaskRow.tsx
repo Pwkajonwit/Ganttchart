@@ -186,14 +186,15 @@ export const TaskRow: React.FC<TaskRowProps> = ({
         if (!value) return 'to-order' as const;
         if (value === 'plan-a' || value === 'plan-b' || value === 'plan-c') return 'ordered' as const;
         if (value === 'actual') return 'ready' as const;
-        if (value === 'to-order' || value === 'ordered' || value === 'delivered' || value === 'ready') return value;
+        if (value === 'to-order' || value === 'ordered' || value === 'delivered' || value === 'ready' || value === 'in-stock') return value;
         return 'to-order' as const;
     };
 
-    const getProcStatusLabelTH = (statusKey: 'to-order' | 'ordered' | 'delivered' | 'ready') => {
+    const getProcStatusLabelTH = (statusKey: 'to-order' | 'ordered' | 'delivered' | 'ready' | 'in-stock') => {
         if (statusKey === 'to-order') return 'To Order';
         if (statusKey === 'ordered') return 'Ordered';
         if (statusKey === 'delivered') return 'Delivered';
+        if (statusKey === 'in-stock') return 'In Stock';
         return 'Ready';
     };
 
@@ -258,7 +259,8 @@ export const TaskRow: React.FC<TaskRowProps> = ({
         return (dayOffset / 30.44) * config.cellWidth + config.cellWidth / 2;
     }, [timeRange.start, viewMode, config.cellWidth]);
 
-    const getProcStatusClass = (statusKey: 'to-order' | 'ordered' | 'delivered' | 'ready') => {
+    const getProcStatusClass = (statusKey: 'to-order' | 'ordered' | 'delivered' | 'ready' | 'in-stock') => {
+        if (statusKey === 'in-stock') return 'text-slate-700 bg-slate-100';
         if (statusKey === 'ready') return 'text-emerald-700 bg-emerald-50';
         if (statusKey === 'delivered') return 'text-indigo-700 bg-indigo-50';
         if (statusKey === 'ordered') return 'text-cyan-700 bg-cyan-50';
@@ -483,6 +485,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                                         <option value="ordered">Ordered</option>
                                         <option value="delivered">Delivered</option>
                                         <option value="ready">Ready</option>
+                                        <option value="in-stock">In Stock</option>
                                     </select>
                                 ) : (
                                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${getProcStatusClass(procurementDates.statusKey)}`}>

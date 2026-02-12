@@ -74,8 +74,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
         <div key={category}>
             {/* Category Header */}
             <div
-                className={`flex bg-white border-b border-dashed border-gray-300/60 cursor-pointer hover:bg-gray-50 transition-colors h-8 group relative ${isDragging ? 'opacity-40 bg-blue-50' : ''}`}
-                onClick={() => toggleCategory(category)}
+                className={`flex bg-white border-b border-dashed border-gray-300/60 hover:bg-gray-50 transition-colors h-8 group relative ${isDragging ? 'opacity-40 bg-blue-50' : ''}`}
                 onDragOver={(e) => onCategoryDragOver?.(e)}
                 onDrop={(e) => onCategoryDrop?.(e, category)}
             >
@@ -99,7 +98,15 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
 
                     {/* Collapse Button */}
                     <div className="w-4 flex justify-center mr-1">
-                        <button className="p-0.5 hover:bg-gray-200 rounded-sm transition-colors text-gray-500">
+                        <button
+                            type="button"
+                            className="p-0.5 hover:bg-gray-200 rounded-sm transition-colors text-gray-500"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCategory(category);
+                            }}
+                            title={isCollapsed ? 'Expand category' : 'Collapse category'}
+                        >
                             {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
                     </div>

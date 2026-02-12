@@ -52,7 +52,7 @@ export default function SCurveChart(props: SCurveChartProps) {
     useEffect(() => {
         if (!scrollContainerRef.current) return;
         const resizeObserver = new ResizeObserver(entries => {
-            for (let entry of entries) {
+            for (const entry of entries) {
                 if (entry.contentRect.width > 0) setContainerWidth(entry.contentRect.width);
             }
         });
