@@ -204,16 +204,16 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-10 bg-white min-h-screen text-gray-900 font-sans p-6 text-sm">
+    <div className="space-y-6 max-w-7xl mx-auto pb-10 min-h-screen text-gray-900 font-sans p-6 text-xs">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200 pb-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Portfolio Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Overview as of {format(new Date(), 'd MMM yyyy, HH:mm')}</p>
+          <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Portfolio Dashboard</h1>
+          <p className="text-gray-500 text-xs mt-0.5">Overview as of {format(new Date(), 'd MMM yyyy, HH:mm')}</p>
         </div>
         <Link
           href="/projects"
-          className="inline-flex items-center justify-center px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-sm hover:bg-gray-800 transition-colors"
+          className="inline-flex items-center justify-center px-4 py-2 bg-gray-900 text-white text-xs font-medium rounded-sm hover:bg-gray-800 transition-colors"
         >
           <FolderGit2 className="w-4 h-4 mr-2" />
           Manage Projects
@@ -222,7 +222,7 @@ export default function DashboardPage() {
 
       {/* Overview Stats Cards - Colorful */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 rounded-lg border border-blue-100 bg-blue-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
+        <div className="p-4 rounded-md border border-blue-100 bg-blue-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
           <div className="absolute top-0 right-0 p-3 opacity-10">
             <FolderGit2 className="w-16 h-16 text-blue-600" />
           </div>
@@ -235,7 +235,7 @@ export default function DashboardPage() {
           <p className="relative z-10 text-3xl font-bold text-gray-900 leading-none">{globalStats.total}</p>
         </div>
 
-        <div className="p-4 rounded-lg border border-green-100 bg-green-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
+        <div className="p-4 rounded-md border border-green-100 bg-green-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
           <div className="absolute top-0 right-0 p-3 opacity-10">
             <CheckCircle2 className="w-16 h-16 text-green-600" />
           </div>
@@ -251,7 +251,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-lg border border-red-100 bg-red-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
+        <div className="p-4 rounded-md border border-red-100 bg-red-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
           <div className="absolute top-0 right-0 p-3 opacity-10">
             <AlertCircle className="w-16 h-16 text-red-600" />
           </div>
@@ -267,7 +267,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="p-4 rounded-lg border border-amber-100 bg-amber-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
+        <div className="p-4 rounded-md border border-amber-100 bg-amber-50/50 flex flex-col justify-between h-[96px] relative overflow-hidden">
           <div className="absolute top-0 right-0 p-3 opacity-10">
             <Clock className="w-16 h-16 text-amber-600" />
           </div>
@@ -287,7 +287,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content: Project List */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/80 p-3 rounded-lg border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/80 p-3 rounded-md border border-gray-200">
             <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
               <Building2 className="w-5 h-5 text-gray-500" />
               Project Status
@@ -301,7 +301,7 @@ export default function DashboardPage() {
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full sm:w-48 pl-9 pr-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all placeholder:text-gray-400"
+                  className="w-full sm:w-48 pl-9 pr-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all placeholder:text-gray-400"
                 />
               </div>
 
@@ -310,7 +310,7 @@ export default function DashboardPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="pl-9 pr-8 py-1.5 bg-white border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all font-medium text-gray-600 cursor-pointer hover:bg-gray-50 appearance-none"
+                  className="pl-9 pr-8 py-1.5 bg-white border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all font-medium text-gray-600 cursor-pointer hover:bg-gray-50 appearance-none"
                 >
                   <option value="active">Active Projects</option>
                   <option value="all">All Projects</option>
@@ -325,8 +325,8 @@ export default function DashboardPage() {
           </div>
 
           {filteredProjects.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-              <p className="text-gray-500 text-sm">No projects match criteria.</p>
+            <div className="text-center py-12 border border-dashed border-gray-300 rounded-md">
+              <p className="text-gray-500 text-xs">No projects match criteria.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
@@ -337,7 +337,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={project.id}
-                    className={`group rounded-lg border p-5 transition-all hover:shadow-md bg-white
+                    className={`group rounded-md border p-5 transition-all hover:shadow-md bg-white
                                             ${isCompleted ? 'border-green-200 bg-green-50/5' :
                         isOnHold ? 'border-amber-200 bg-amber-50/5' :
                           'border-gray-200 hover:border-blue-300'}
@@ -352,7 +352,7 @@ export default function DashboardPage() {
                           {isCompleted && <span className="px-2.5 py-0.5 bg-green-100 text-green-700 text-xs uppercase font-bold tracking-wide rounded-full">Completed</span>}
                           {isOnHold && <span className="px-2.5 py-0.5 bg-amber-100 text-amber-700 text-xs uppercase font-bold tracking-wide rounded-full">On Hold</span>}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <div className="flex items-center gap-4 text-xs text-gray-500">
                           <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded text-gray-600">
                             <CalendarDays className="w-3.5 h-3.5" />
                             {format(parseDate(project.startDate), 'MMM d')} - {format(parseDate(project.endDate), 'MMM d, yy')}
@@ -443,17 +443,17 @@ export default function DashboardPage() {
         {/* Right Sidebar: Critical Tasks & Summary */}
         <div className="space-y-4">
           {/* Critical Tasks Panel */}
-          <div className="bg-white rounded-lg border border-red-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-md border border-red-100 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 bg-red-50/50 border-b border-red-100">
               <AlertCircle className="w-4 h-4 text-red-600" />
-              <h3 className="font-bold text-sm text-red-900">Action Required</h3>
+              <h3 className="font-bold text-xs text-red-900">Action Required</h3>
             </div>
 
             <div className="p-4">
               {criticalTasks.length === 0 ? (
                 <div className="py-6 text-center">
                   <CheckCircle2 className="w-8 h-8 text-green-100 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No critical delays.</p>
+                  <p className="text-xs text-gray-500">No critical delays.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -471,7 +471,7 @@ export default function DashboardPage() {
                               {project?.name}
                             </span>
                           </div>
-                          <p className="text-sm font-semibold text-gray-800 mb-1 line-clamp-1 group-hover:text-red-700 transition-colors">{task.name}</p>
+                          <p className="text-xs font-semibold text-gray-800 mb-1 line-clamp-1 group-hover:text-red-700 transition-colors">{task.name}</p>
                           <div className="flex justify-between text-xs text-gray-500 font-medium">
                             <span>Due: {format(parseDate(task.planEndDate), 'MMM d')}</span>
                             <span className="text-red-600">{task.progress}% done</span>
@@ -492,7 +492,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Daily Brief */}
-          <div className="bg-slate-900 rounded-lg p-5 text-white shadow-lg relative overflow-hidden">
+          <div className="bg-slate-900 rounded-md p-5 text-white shadow-lg relative overflow-hidden">
             {/* Abstract Background Decoration */}
             <div className="absolute top-0 right-0 -mt-2 -mr-2 w-20 h-20 bg-blue-500 rounded-full opacity-10 blur-xl"></div>
             <div className="absolute bottom-0 left-0 -mb-2 -ml-2 w-16 h-16 bg-purple-500 rounded-full opacity-10 blur-xl"></div>
@@ -500,9 +500,9 @@ export default function DashboardPage() {
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-3 text-blue-300">
                 <Clock className="w-4 h-4" />
-                <span className="text-sm font-bold uppercase tracking-wider">Daily Brief</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Daily Brief</span>
               </div>
-              <p className="text-sm text-slate-300 leading-relaxed mb-4">
+              <p className="text-xs text-slate-300 leading-relaxed mb-4">
                 You have <span className="text-white font-bold">{globalStats.onTrack + globalStats.delayed} active projects</span>.
                 <br />
                 <span className={globalStats.delayed > 0 ? "text-red-300 font-medium" : "text-green-300 font-medium"}>

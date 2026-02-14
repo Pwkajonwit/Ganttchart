@@ -1278,7 +1278,7 @@ export default function ProjectDetailPage() {
                         </button>
 
                         {isViewMenuOpen && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-lg z-50 py-1">
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded  z-50 py-1">
                                 <Link
                                     href={`/gantt/${projectId}`}
                                     className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
@@ -1337,7 +1337,7 @@ export default function ProjectDetailPage() {
                                 </button>
 
                                 {isManageMenuOpen && (
-                                    <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-lg z-50 py-1">
+                                    <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded  z-50 py-1">
                                         <button
                                             onClick={() => {
                                                 handleExport();
@@ -1395,7 +1395,7 @@ export default function ProjectDetailPage() {
 
             {/* Project Overview Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5">
-                <div className="bg-white rounded-md border border-gray-100 p-2 shadow-sm">
+                <div className="bg-white rounded-md border border-gray-200 p-2">
                     <div className="flex items-center gap-1.5">
                         <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
                             <Target className="w-3 h-3 text-blue-600" />
@@ -1410,7 +1410,7 @@ export default function ProjectDetailPage() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-md border border-gray-100 p-2 shadow-sm">
+                <div className="bg-white rounded-md border border-gray-200 p-2">
                     <div className="flex items-center gap-1.5">
                         <div className="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
                             <CheckCircle2 className="w-3 h-3 text-green-600" />
@@ -1422,7 +1422,7 @@ export default function ProjectDetailPage() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-md border border-gray-100 p-2 shadow-sm">
+                <div className="bg-white rounded-md border border-gray-200 p-2">
                     <div className="flex items-center gap-1.5">
                         <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center">
                             <Clock className="w-3 h-3 text-amber-600" />
@@ -1434,7 +1434,7 @@ export default function ProjectDetailPage() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-md border border-gray-100 p-2 shadow-sm">
+                <div className="bg-white rounded-md border border-gray-200 p-2">
                     <div className="flex items-center gap-1.5">
                         <div className="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
                             <TrendingUp className="w-3 h-3 text-purple-600" />
@@ -1448,7 +1448,7 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Task Table */}
-            <div className="bg-white rounded-lg border border-gray-100 overflow-visible shadow-sm">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-visible ">
                 <div className="px-4 py-3 border-b border-gray-200 bg-slate-50 flex items-center justify-between">
                     <h2 className="font-semibold text-gray-900 flex items-center gap-2">
                         <ListTodo className="w-5 h-5 text-blue-600" />
@@ -1464,7 +1464,7 @@ export default function ProjectDetailPage() {
                             คอลัมน์
                         </button>
                         {isColumnMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[80] p-2">
+                            <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg  z-[80] p-2">
                                 {columnOptions.map((col) => (
                                     <label key={col.key} className="flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 rounded cursor-pointer">
                                         <input
@@ -1953,8 +1953,8 @@ export default function ProjectDetailPage() {
             {
                 isModalOpen && (
                     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-[2px]">
-                        <div className="bg-white rounded-lg w-full max-w-4xl shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
-                            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-white rounded-t-lg shrink-0">
+                        <div className="bg-white rounded-lg w-full max-w-4xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh]">
+                            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 bg-white rounded-t-lg shrink-0">
                                 <div>
                                     <h2 className="text-xl font-semibold text-gray-800">
                                         {editingTask ? 'แก้ไขรายละเอียดงาน' : 'เพิ่มรายการงานใหม่'}
@@ -2122,7 +2122,7 @@ export default function ProjectDetailPage() {
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">ผู้รับผิดชอบ</label>
                                             <div className="w-full border border-gray-300 rounded-lg bg-white">
-                                                <div className="px-3 py-2 border-b border-gray-100 min-h-[44px] flex flex-wrap gap-2">
+                                                <div className="px-3 py-2 border-b border-gray-200 min-h-[44px] flex flex-wrap gap-2">
                                                     {selectedAssignedEmployees.length > 0 ? (
                                                         selectedAssignedEmployees.map((employee) => (
                                                             <span key={employee.id} className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
@@ -2185,7 +2185,7 @@ export default function ProjectDetailPage() {
                             </div>
 
                             {/* Footer Actions */}
-                            <div className="flex items-center justify-end gap-3 px-8 py-5 bg-gray-50 border-t border-gray-100 rounded-b-lg shrink-0">
+                            <div className="flex items-center justify-end gap-3 px-8 py-5 bg-gray-50 border-t border-gray-200 rounded-b-lg shrink-0">
                                 <button
                                     type="button"
                                     onClick={() => setIsModalOpen(false)}

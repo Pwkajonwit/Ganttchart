@@ -80,8 +80,10 @@ export default function ProcurementOverviewPage() {
                 tasks={tasks}
                 windowStart={fourWeekRange.start}
                 windowEnd={fourWeekRange.end}
+                onProjectUpdate={(updatedProject) => {
+                    setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
+                }}
             />
         </div>
     );
 }
-

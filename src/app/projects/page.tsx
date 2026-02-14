@@ -240,7 +240,7 @@ export default function ProjectsPage() {
                 {['admin', 'project_manager'].includes(user?.role || '') && (
                     <button
                         onClick={openCreateModal}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-sm hover:bg-blue-700 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
                     >
                         <Plus className="w-4 h-4" />
                         สร้างโครงการใหม่
@@ -250,26 +250,26 @@ export default function ProjectsPage() {
 
             {/* Quick Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="bg-white rounded-sm border border-gray-300 p-4">
+                <div className="bg-white rounded-md border border-gray-300 p-4">
                     <p className="text-gray-600 text-xs font-medium">โครงการทั้งหมด</p>
                     <p className="text-2xl font-semibold text-gray-900 mt-1">{stats.total}</p>
                 </div>
-                <div className="bg-white rounded-sm border border-gray-300 p-4">
+                <div className="bg-white rounded-md border border-gray-300 p-4">
                     <p className="text-gray-600 text-xs font-medium">กำลังดำเนินการ</p>
                     <p className="text-2xl font-semibold text-blue-600 mt-1">{stats.inProgress}</p>
                 </div>
-                <div className="bg-white rounded-sm border border-gray-300 p-4">
+                <div className="bg-white rounded-md border border-gray-300 p-4">
                     <p className="text-gray-600 text-xs font-medium">เสร็จสิ้น</p>
                     <p className="text-2xl font-semibold text-green-600 mt-1">{stats.completed}</p>
                 </div>
-                <div className="bg-white rounded-sm border border-gray-300 p-4">
+                <div className="bg-white rounded-md border border-gray-300 p-4">
                     <p className="text-gray-600 text-xs font-medium">วางแผน</p>
                     <p className="text-2xl font-semibold text-gray-600 mt-1">{stats.planning}</p>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-sm border border-gray-300 p-4 flex flex-col lg:flex-row gap-3">
+            <div className="bg-white rounded-md border border-gray-300 p-4 flex flex-col lg:flex-row gap-3">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input
@@ -277,14 +277,14 @@ export default function ProjectsPage() {
                         placeholder="ค้นหาโครงการ..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                        className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
                     />
                 </div>
 
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as StatusType)}
-                    className="px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors font-medium text-gray-700"
+                    className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors font-medium text-gray-700"
                 >
                     <option value="active">⚡ ดำเนินการอยู่ (Active)</option>
                     <option value="all">ทั้งหมด (All)</option>
@@ -295,7 +295,7 @@ export default function ProjectsPage() {
                     <option value="completed">เสร็จสิ้น</option>
                 </select>
 
-                <div className="flex items-center bg-white border border-gray-300 rounded-sm overflow-hidden">
+                <div className="flex items-center bg-white border border-gray-300 rounded-md overflow-hidden">
                     <button
                         onClick={() => setViewMode('grid')}
                         className={`px-3 py-2 text-sm ${viewMode === 'grid' ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
@@ -371,7 +371,7 @@ export default function ProjectsPage() {
 
                                             {/* Menu & Status */}
                                             <div className="flex items-center gap-2 flex-shrink-0">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${statusConfig.class}`}>
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${statusConfig.class}`}>
                                                     {statusConfig.label}
                                                 </span>
 
@@ -429,12 +429,12 @@ export default function ProjectsPage() {
                                         <div className="grid grid-cols-2 gap-4 mb-4 mt-auto">
                                             {/* Date Info */}
                                             <div>
-                                                <p className="text-[10px] text-gray-400 font-medium uppercase mb-1">Timeline</p>
+                                                <p className="text-xs text-gray-400 font-medium uppercase mb-1">Timeline</p>
                                                 <div className="flex items-center gap-1.5 text-xs text-gray-700 font-medium">
                                                     <Calendar className="w-3.5 h-3.5 text-gray-400" />
                                                     <span>{duration} Days</span>
                                                 </div>
-                                                <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                                                <p className="text-xs text-gray-400 mt-0.5 truncate">
                                                     {formatDate(project.startDate)} - {formatDate(project.endDate)}
                                                 </p>
                                             </div>
@@ -442,7 +442,7 @@ export default function ProjectsPage() {
                                             {/* Progress Info */}
                                             <div className="flex flex-col justify-end">
                                                 <div className="flex justify-between items-end mb-1">
-                                                    <span className="text-[10px] text-gray-400 font-medium uppercase">Progress</span>
+                                                    <span className="text-xs text-gray-400 font-medium uppercase">Progress</span>
                                                     <span className={`text-xs font-bold ${project.overallProgress >= 100 ? 'text-green-600' : 'text-gray-900'}`}>{project.overallProgress}%</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
@@ -468,7 +468,7 @@ export default function ProjectsPage() {
                                                 title="S-Curve Analysis"
                                             >
                                                 <BarChart3 className="w-4 h-4 mb-1.5" />
-                                                <span className="text-[10px] font-semibold">S-Curve</span>
+                                                <span className="text-xs font-semibold">S-Curve</span>
                                             </Link>
 
                                             {/* Gantt */}
@@ -478,7 +478,7 @@ export default function ProjectsPage() {
                                                 title="Gantt Chart"
                                             >
                                                 <GanttChartSquare className="w-4 h-4 mb-1.5" />
-                                                <span className="text-[10px] font-semibold">Gantt</span>
+                                                <span className="text-xs font-semibold">Gantt</span>
                                             </Link>
 
                                             {/* Procurement */}
@@ -488,7 +488,7 @@ export default function ProjectsPage() {
                                                 title="Procurement Plan"
                                             >
                                                 <ShoppingBag className="w-4 h-4 mb-1.5" />
-                                                <span className="text-[10px] font-semibold">Procure</span>
+                                                <span className="text-xs font-semibold">Procure</span>
                                             </Link>
 
                                             {/* 4 Week */}
@@ -498,7 +498,7 @@ export default function ProjectsPage() {
                                                 title="4 Week Lookahead"
                                             >
                                                 <CalendarDays className="w-4 h-4 mb-1.5" />
-                                                <span className="text-[10px] font-semibold">4-Week</span>
+                                                <span className="text-xs font-semibold">4-Week</span>
                                             </Link>
                                             {/* Tasks (Main Project Page) */}
                                             <Link
@@ -507,7 +507,7 @@ export default function ProjectsPage() {
                                                 title="Project Tasks"
                                             >
                                                 <ListTodo className="w-4 h-4 mb-1.5" />
-                                                <span className="text-[10px] font-semibold">Tasks</span>
+                                                <span className="text-xs font-semibold">Tasks</span>
                                             </Link>
                                         </div>
                                     </div>
@@ -517,7 +517,7 @@ export default function ProjectsPage() {
                     </div>
                 ) : (
                     /* Projects List View */
-                    <div className="bg-white rounded-sm border border-gray-300 overflow-hidden">
+                    <div className="bg-white rounded-md border border-gray-300 overflow-hidden">
                         <table className="w-full">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
@@ -656,7 +656,7 @@ export default function ProjectsPage() {
             {
                 isModalOpen && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-sm w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-none border border-gray-500">
+                        <div className="bg-white rounded-md w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-none border border-gray-500">
                             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                                 <h2 className="text-lg font-semibold text-gray-900">
                                     {editingProject ? 'แก้ไขโครงการ' : 'สร้างโครงการใหม่'}
@@ -678,7 +678,7 @@ export default function ProjectsPage() {
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                         placeholder="เช่น Entrance 1 Construction"
-                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
                                     />
                                 </div>
 
@@ -691,7 +691,7 @@ export default function ProjectsPage() {
                                             value={formData.owner}
                                             onChange={(e) => setFormData({ ...formData, owner: e.target.value })}
                                             placeholder="เช่น SCCC"
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -699,7 +699,7 @@ export default function ProjectsPage() {
                                         <select
                                             value={formData.status}
                                             onChange={(e) => setFormData({ ...formData, status: e.target.value as Project['status'] })}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
                                         >
                                             <option value="planning">วางแผน</option>
                                             <option value="in-progress">กำลังดำเนินการ</option>
@@ -716,7 +716,7 @@ export default function ProjectsPage() {
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                         placeholder="รายละเอียดโครงการ..."
-                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors resize-none"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors resize-none"
                                     />
                                 </div>
 
@@ -728,7 +728,7 @@ export default function ProjectsPage() {
                                             required
                                             value={formData.startDate}
                                             onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -738,7 +738,7 @@ export default function ProjectsPage() {
                                             required
                                             value={formData.endDate}
                                             onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
                                         />
                                     </div>
                                 </div>
@@ -747,14 +747,14 @@ export default function ProjectsPage() {
                                     <button
                                         type="button"
                                         onClick={() => setIsModalOpen(false)}
-                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-sm hover:bg-gray-200 transition-colors"
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
                                     >
                                         ยกเลิก
                                     </button>
                                     <button
                                         type="submit"
                                         disabled={saving}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-sm hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                                     >
                                         {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                                         {editingProject ? 'บันทึก' : 'สร้างโครงการ'}
@@ -769,7 +769,7 @@ export default function ProjectsPage() {
             {/* Delete Confirmation Modal */}
             {projectToDelete && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-sm w-full max-w-md p-6 border border-gray-400 shadow-none">
+                    <div className="bg-white rounded-md w-full max-w-md p-6 border border-gray-400 shadow-none">
                         <div className="flex flex-col items-center text-center">
                             <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
                                 <AlertTriangle className="w-6 h-6" />
@@ -784,14 +784,14 @@ export default function ProjectsPage() {
                             <div className="flex items-center gap-3 w-full">
                                 <button
                                     onClick={() => setProjectToDelete(null)}
-                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-sm hover:bg-gray-200"
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                                 >
                                     ยกเลิก
                                 </button>
                                 <button
                                     onClick={confirmDelete}
                                     disabled={saving}
-                                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-sm hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                                     ลบโครงการ
