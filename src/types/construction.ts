@@ -28,7 +28,7 @@ export interface Task {
     responsible?: string;
     assignedEmployeeIds?: string[];
     color?: string; // Custom color for the task/group bar
-    // weight removed
+    costCode?: string; // e.g. "1", "2", "101"
     cost?: number; // Cost in Baht
     quantity?: string; // Q'ty with unit (e.g. "20 m.")
     planStartDate: string;
