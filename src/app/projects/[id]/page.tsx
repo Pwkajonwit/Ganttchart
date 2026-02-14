@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -30,11 +31,15 @@ import {
     ArrowDown,
     GripVertical,
     Settings2,
+    MoreHorizontal,
+    FileInput,
+    Layout
 } from 'lucide-react';
 import { format, parseISO, differenceInDays, addDays } from 'date-fns';
 import { Project, Task, Employee } from '@/types/construction';
 import { getProject, getTasks, createTask, updateTask, deleteTask, getEmployees, syncGroupProgress, batchCreateTasks, deleteAllTasks } from '@/lib/firestore';
 import { useAuth } from '@/contexts/AuthContext';
+import { COST_CODES, getCostCodeName } from '@/constants/costCodes';
 
 // Helper: Format date to Thai format
 const formatDateTH = (dateStr: string | undefined | null) => {
@@ -97,6 +102,7 @@ export default function ProjectDetailPage() {
         progress: 0,
         responsible: '',
         assignedEmployeeIds: [] as string[],
+        costCode: '',
     });
 
     // Progress Modal
@@ -120,7 +126,7 @@ export default function ProjectDetailPage() {
     const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
     const [dragType, setDragType] = useState<'task' | 'category' | null>(null);
     const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
-    type OptionalColumnKey = 'planDate' | 'cost' | 'quantity' | 'duration' | 'responsible' | 'progress' | 'status' | 'actions';
+    type OptionalColumnKey = 'planDate' | 'cost' | 'quantity' | 'duration' | 'responsible' | 'progress' | 'status' | 'actions' | 'costCode';
     const [visibleColumns, setVisibleColumns] = useState<Record<OptionalColumnKey, boolean>>({
         planDate: true,
         cost: true,
@@ -129,6 +135,7 @@ export default function ProjectDetailPage() {
         responsible: true,
         progress: true,
         status: true,
+        costCode: true,
         actions: true,
     });
     const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
@@ -142,6 +149,13 @@ export default function ProjectDetailPage() {
         type: 'info' | 'confirm' | 'error';
         onConfirm?: () => void;
     }>({ isOpen: false, title: '', message: '', type: 'info' });
+
+    // Menu States
+    const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+    const [isManageMenuOpen, setIsManageMenuOpen] = useState(false);
+    const viewMenuRef = React.useRef<HTMLDivElement>(null);
+    const manageMenuRef = React.useRef<HTMLDivElement>(null);
+
 
     // Category Colors State (Synced with Gantt)
     const [categoryColors, setCategoryColors] = useState<Record<string, string>>({});
@@ -170,6 +184,12 @@ export default function ProjectDetailPage() {
         const handleClickOutside = (event: MouseEvent) => {
             if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
                 setIsColumnMenuOpen(false);
+            }
+            if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
+                setIsViewMenuOpen(false);
+            }
+            if (manageMenuRef.current && !manageMenuRef.current.contains(event.target as Node)) {
+                setIsManageMenuOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -416,7 +436,8 @@ export default function ProjectDetailPage() {
             progress: 0,
             responsible: '',
             assignedEmployeeIds: [],
-            planDuration: 1
+            planDuration: 1,
+            costCode: ''
         });
         setIsModalOpen(true);
         setShowSubcategory(!!initialSubcategory);
@@ -446,7 +467,8 @@ export default function ProjectDetailPage() {
             progress: task.progress || 0,
             responsible: task.responsible || '',
             assignedEmployeeIds: task.assignedEmployeeIds || fallbackAssignedIds,
-            planDuration: task.planDuration || (task.planStartDate && task.planEndDate ? differenceInDays(parseISO(task.planEndDate), parseISO(task.planStartDate)) + 1 : 1)
+            planDuration: task.planDuration || (task.planStartDate && task.planEndDate ? differenceInDays(parseISO(task.planEndDate), parseISO(task.planStartDate)) + 1 : 1),
+            costCode: task.costCode || ''
         });
         setIsModalOpen(true);
     };
@@ -482,6 +504,7 @@ export default function ProjectDetailPage() {
                 planStartDate: taskForm.planStartDate,
                 planEndDate: taskForm.planEndDate,
                 planDuration: duration,
+                costCode: taskForm.costCode,
                 progress: taskForm.progress,
                 responsible: responsibleNames,
                 assignedEmployeeIds,
@@ -510,7 +533,7 @@ export default function ProjectDetailPage() {
         setAlertDialog({
             isOpen: true,
             title: 'ยืนยันการลบ',
-            message: `ต้องการลบงาน "${task.name}" หรือไม่?`,
+            message: `ต้องการลบงาน "${task.name}" หรือไม่ ? `,
             type: 'confirm',
             onConfirm: async () => {
                 try {
@@ -530,7 +553,7 @@ export default function ProjectDetailPage() {
         setAlertDialog({
             isOpen: true,
             title: 'ยืนยันการลบทั้งหมด',
-            message: `คุณแน่ใจหรือไม่ที่จะลบงานทั้งหมด ${tasks.length} รายการ? การกระทำนี้ไม่สามารถย้อนกลับได้`,
+            message: `คุณแน่ใจหรือไม่ที่จะลบงานทั้งหมด ${tasks.length} รายการ ? การกระทำนี้ไม่สามารถย้อนกลับได้`,
             type: 'confirm',
             onConfirm: async () => {
                 try {
@@ -575,8 +598,6 @@ export default function ProjectDetailPage() {
                 const sourceCat = sourceId.replace('cat::', '');
                 // Target might be "Cat::Sub" if dropped on sub row, we only care if it's a top level cat for reordering?
                 // Actually, if we only support reordering top level, we should check if target is top level.
-                // Assuming `category` passed from Row 1 is just identifier.
-                // If dropped on Sub row (Cat::Sub), we probably shouldn't reorder Categories based on that?
                 // Let's assume Category Reorder only works on top level rows for now.
                 if (target.includes('::')) return;
 
@@ -769,7 +790,8 @@ export default function ProjectDetailPage() {
             'Progress (%)',
             'Status',
             'Actual Start',
-            'Actual End'
+            'Actual End',
+            'Cost Code'
         ];
 
         // Add instruction row
@@ -788,7 +810,8 @@ export default function ProjectDetailPage() {
             'ความคืบหน้า (%)',
             'สถานะ',
             'วันเริ่มจริง (dd/MM/yyyy)',
-            'วันสิ้นสุดจริง (dd/MM/yyyy)'
+            'วันสิ้นสุดจริง (dd/MM/yyyy)',
+            'รหัสต้นทุน'
         ];
 
         const rows = tasks.map(t => [
@@ -806,7 +829,8 @@ export default function ProjectDetailPage() {
             t.progress || 0,
             getEffectiveStatus(t),
             formatDateForCSV(t.actualStartDate),
-            formatDateForCSV(t.actualEndDate)
+            formatDateForCSV(t.actualEndDate),
+            `"${(t.costCode || '').replace(/"/g, '""')}"`
         ]);
 
         // Add BOM for Excel Thai support
@@ -924,7 +948,8 @@ export default function ProjectDetailPage() {
                     status: normalizedStatus,
                     order: ++orderCounter,
                     actualStartDate: fixDate(row['Actual Start'] || ''),
-                    actualEndDate: fixDate(row['Actual End'] || '')
+                    actualEndDate: fixDate(row['Actual End'] || ''),
+                    costCode: row['Cost Code'] || row['รหัสต้นทุน'] || ''
                 });
             }
 
@@ -950,19 +975,19 @@ export default function ProjectDetailPage() {
         const headers = [
             'Category', 'Subcategory', 'SubSubcategory', 'Type', 'Task Name',
             'Plan Start', 'Plan End', 'Duration (Days)', 'Cost',
-            'Quantity', 'Responsible', 'Progress (%)', 'Status'
+            'Quantity', 'Responsible', 'Progress (%)', 'Status', 'Cost Code'
         ];
 
         const instruction = [
             'หมวดหมู่ (จำเป็น)', 'หมวดหมู่ย่อย', 'หมวดหมู่ย่อย 2', 'task/group', 'ชื่องาน (จำเป็น)',
             'dd/MM/yyyy', 'dd/MM/yyyy', 'จำนวนวัน', 'บาท',
-            'หน่วย', 'ชื่อผู้รับผิดชอบ', '0-100', 'not-started/in-progress/completed'
+            'หน่วย', 'ชื่อผู้รับผิดชอบ', '0-100', 'not-started/in-progress/completed', 'รหัสต้นทุน'
         ];
 
         const sample = [
-            ['งานเตรียมการ', '', '', 'task', 'งานรื้อถอน', '01/01/2024', '05/01/2024', '5', '10000', '1 งาน', 'ช่าง ก', '0', 'not-started'],
-            ['งานโครงสร้าง', 'งานฐานราก', '', 'task', 'ขุดดิน', '06/01/2024', '10/01/2024', '5', '5000', '10 ลบ.ม.', 'ช่าง ข', '0', 'not-started'],
-            ['งานโครงสร้าง', 'งานฐานราก', 'งานเหล็กเสริม', 'task', 'ผูกเหล็ก', '11/01/2024', '15/01/2024', '5', '20000', '100 กก.', 'ช่าง ค', '0', 'not-started']
+            ['งานเตรียมการ', '', '', 'task', 'งานรื้อถอน', '01/01/2024', '05/01/2024', '5', '10000', '1 งาน', 'ช่าง ก', '0', 'not-started', '1'],
+            ['งานโครงสร้าง', 'งานฐานราก', '', 'task', 'ขุดดิน', '06/01/2024', '10/01/2024', '5', '5000', '10 ลบ.ม.', 'ช่าง ข', '0', 'not-started', '3'],
+            ['งานโครงสร้าง', 'งานฐานราก', 'งานเหล็กเสริม', 'task', 'ผูกเหล็ก', '11/01/2024', '15/01/2024', '5', '20000', '100 กก.', 'ช่าง ค', '0', 'not-started', '1']
         ];
 
         const csvContent = '\uFEFF' + [
@@ -1189,6 +1214,8 @@ export default function ProjectDetailPage() {
         { key: 'responsible', label: 'ผู้รับผิดชอบ' },
         { key: 'progress', label: 'Progress' },
         { key: 'status', label: 'สถานะ' },
+        { key: 'status', label: 'สถานะ' },
+        { key: 'costCode', label: 'Cost Code' },
         { key: 'actions', label: 'Actions' },
     ];
 
@@ -1232,83 +1259,137 @@ export default function ProjectDetailPage() {
                             className="mt-0.5 max-w-[900px] truncate text-sm text-gray-500"
                             title={project.description || 'No description'}
                         >
-                            {project.description || '\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1A\u0E32\u0E22'}
+                            {project.description || '\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E33\u0E2D\u0E18\u0E34\u0E1B\u0E32\u0E22'}
                         </p>
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5 sm:ml-auto sm:justify-end">
-                    <Link
-                        href={`/gantt/${projectId}`}
-                        className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                        title="ไปหน้า Gantt"
-                    >
-                        <Layers className="w-4 h-4 text-blue-600" />
-                        Gantt
-                    </Link>
-                    <Link
-                        href={`/gantt-4w/${projectId}`}
-                        className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                        title="ไปหน้า Gantt 4W"
-                    >
-                        <Calendar className="w-4 h-4 text-indigo-600" />
-                        Gantt 4W
-                    </Link>
-                    <Link
-                        href={`/procurement/${projectId}`}
-                        className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                        title="Go to Procurement"
-                    >
-                        <Calendar className="w-4 h-4 text-amber-600" />
-                        Procurement
-                    </Link>
-                    <Link
-                        href={`/scurve/${projectId}`}
-                        className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                        title="ไปหน้า S-Curve"
-                    >
-                        <TrendingUp className="w-4 h-4 text-emerald-600" />
-                        S-Curve
-                    </Link>
-                {canEdit && (
-                    <div className="flex flex-wrap gap-1.5">
+
+                {/* Views Dropdown & Manage Dropdown Here */}
+                <div className="flex flex-wrap gap-2 sm:ml-auto sm:justify-end items-center">
+                    {/* Views Dropdown */}
+                    <div className="relative" ref={viewMenuRef}>
                         <button
-                            onClick={handleDeleteAllTasks}
-                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-sm hover:bg-red-100 transition-colors flex items-center gap-1.5"
-                            title="ลบงานทั้งหมด"
+                            onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
                         >
-                            <Trash2 className="w-4 h-4" />
-                            ลบทั้งหมด
+                            <Layout className="w-4 h-4 text-gray-500" />
+                            Views
+                            <ChevronDown className="w-3 h-3 text-gray-400" />
                         </button>
-                        <button
-                            onClick={handleExport}
-                            className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                            title="Export to CSV"
-                        >
-                            <Download className="w-4 h-4" />
-                            Export
-                        </button>
-                        <button
-                            onClick={handleDownloadTemplate}
-                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-sm hover:bg-green-100 transition-colors flex items-center gap-1.5"
-                            title="ดาวน์โหลดตัวอย่าง CSV"
-                        >
-                            <Download className="w-4 h-4" />
-                            ตัวอย่าง CSV
-                        </button>
-                        <label className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5 cursor-pointer">
-                            <Upload className="w-4 h-4" />
-                            Import
-                            <input type="file" accept=".csv" onChange={handleImport} className="hidden" />
-                        </label>
-                        <button
-                            onClick={() => openCreateModal()}
-                            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-sm hover:bg-blue-700 transition-colors flex items-center gap-1.5"
-                        >
-                            <Plus className="w-4 h-4" />
-                            เพิ่มงานใหม่
-                        </button>
+
+                        {isViewMenuOpen && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-lg z-50 py-1">
+                                <Link
+                                    href={`/gantt/${projectId}`}
+                                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    onClick={() => setIsViewMenuOpen(false)}
+                                >
+                                    <Layers className="w-4 h-4 text-blue-600" />
+                                    Gantt Chart
+                                </Link>
+                                <Link
+                                    href={`/cost-code/${projectId}`}
+                                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    onClick={() => setIsViewMenuOpen(false)}
+                                >
+                                    <Target className="w-4 h-4 text-purple-600" />
+                                    Cost Code Summary
+                                </Link>
+                                <Link
+                                    href={`/gantt-4w/${projectId}`}
+                                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    onClick={() => setIsViewMenuOpen(false)}
+                                >
+                                    <Calendar className="w-4 h-4 text-indigo-600" />
+                                    4-Week Lookahead
+                                </Link>
+                                <Link
+                                    href={`/procurement/${projectId}`}
+                                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    onClick={() => setIsViewMenuOpen(false)}
+                                >
+                                    <Calendar className="w-4 h-4 text-amber-600" />
+                                    Procurement Plan
+                                </Link>
+                                <Link
+                                    href={`/scurve/${projectId}`}
+                                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    onClick={() => setIsViewMenuOpen(false)}
+                                >
+                                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                                    S-Curve Analysis
+                                </Link>
+                            </div>
+                        )}
                     </div>
-                )}
+
+                    {canEdit && (
+                        <>
+                            {/* Manage Dropdown */}
+                            <div className="relative" ref={manageMenuRef}>
+                                <button
+                                    onClick={() => setIsManageMenuOpen(!isManageMenuOpen)}
+                                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                                >
+                                    <Settings2 className="w-4 h-4 text-gray-500" />
+                                    Manage
+                                    <ChevronDown className="w-3 h-3 text-gray-400" />
+                                </button>
+
+                                {isManageMenuOpen && (
+                                    <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-lg z-50 py-1">
+                                        <button
+                                            onClick={() => {
+                                                handleExport();
+                                                setIsManageMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        >
+                                            <Download className="w-4 h-4" />
+                                            Export CSV
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                handleDownloadTemplate();
+                                                setIsManageMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        >
+                                            <FileInput className="w-4 h-4" />
+                                            Download Template
+                                        </button>
+                                        <label className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 cursor-pointer">
+                                            <Upload className="w-4 h-4" />
+                                            Import CSV
+                                            <input type="file" accept=".csv" onChange={(e) => {
+                                                handleImport(e);
+                                                setIsManageMenuOpen(false);
+                                            }} className="hidden" />
+                                        </label>
+                                        <div className="h-px bg-gray-100 my-1" />
+                                        <button
+                                            onClick={() => {
+                                                handleDeleteAllTasks();
+                                                setIsManageMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            Delete All Data
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={() => openCreateModal()}
+                                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-sm hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                            >
+                                <Plus className="w-4 h-4" />
+                                เพิ่มงานใหม่
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -1429,6 +1510,7 @@ export default function ProjectDetailPage() {
                                     {visibleColumns.responsible && <th className="px-3 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wide">ผู้รับผิดชอบ</th>}
                                     {visibleColumns.progress && <th className="px-3 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wide">Progress</th>}
                                     {visibleColumns.status && <th className="px-3 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wide">สถานะ</th>}
+                                    {visibleColumns.costCode && <th className="px-3 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wide">Cost Code</th>}
                                     {visibleColumns.actions && <th className="px-3 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wide sticky right-0 z-30 bg-slate-50 border-l border-gray-200">Actions</th>}
                                 </tr>
                             </thead>
@@ -1525,6 +1607,7 @@ export default function ProjectDetailPage() {
                                                         </td>
                                                     )}
                                                     {visibleColumns.status && <td className="px-3 py-2 text-center">-</td>}
+                                                    {visibleColumns.costCode && <td className="px-3 py-2 text-center">-</td>}
                                                     {visibleColumns.actions && <td className="px-3 py-2 text-center sticky right-0 z-20 bg-inherit border-l border-gray-200">-</td>}
                                                 </tr>
 
@@ -1609,6 +1692,7 @@ export default function ProjectDetailPage() {
                                                                             </td>
                                                                         )}
                                                                         {visibleColumns.status && <td className="px-3 py-2 text-center">-</td>}
+                                                                        {visibleColumns.costCode && <td className="px-3 py-2 text-center">-</td>}
                                                                         {visibleColumns.actions && <td className="px-3 py-2 text-center sticky right-0 z-20 bg-inherit border-l border-gray-200">-</td>}
                                                                     </tr>
 
@@ -1690,6 +1774,7 @@ export default function ProjectDetailPage() {
                                                                                                 </td>
                                                                                             )}
                                                                                             {visibleColumns.status && <td className="px-3 py-2 text-center">-</td>}
+                                                                                            {visibleColumns.costCode && <td className="px-3 py-2 text-center">-</td>}
                                                                                             {visibleColumns.actions && <td className="px-3 py-2 text-center sticky right-0 z-20 bg-inherit border-l border-gray-200">-</td>}
                                                                                         </tr>
 
@@ -1720,13 +1805,14 @@ export default function ProjectDetailPage() {
                                                                                                 {visibleColumns.responsible && <td className="px-3 py-2 text-left text-xs text-gray-700">{renderResponsibleAvatars(task)}</td>}
                                                                                                 {visibleColumns.progress && (
                                                                                                     <td className="px-3 py-2">
-                                                                                                        <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                                                                                            <div className={`h-full ${task.progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                                                        <div className="flex items-center gap-2 justify-center">
+                                                                                                            <div className="w-28"><ProgressBar value={task.progress} /></div>
+                                                                                                            <span className="text-sm font-semibold text-gray-800 tabular-nums w-10 text-right">{task.progress}%</span>
                                                                                                         </div>
-                                                                                                        <div className="text-sm font-semibold text-gray-800 tabular-nums text-right">{task.progress}%</div>
                                                                                                     </td>
                                                                                                 )}
                                                                                                 {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(getEffectiveStatus(task))}</td>}
+                                                                                                {visibleColumns.costCode && <td className="px-3 py-1.5 text-center text-xs text-gray-500">{task.costCode || '-'}</td>}
                                                                                                 {visibleColumns.actions && (
                                                                                                     <td className="px-3 py-1.5 sticky right-0 z-20 bg-inherit border-l border-gray-200">
                                                                                                         <div className="flex items-center justify-center gap-1">
@@ -1773,13 +1859,14 @@ export default function ProjectDetailPage() {
                                                                                     {visibleColumns.responsible && <td className="px-3 py-2 text-left text-xs text-gray-700">{renderResponsibleAvatars(task)}</td>}
                                                                                     {visibleColumns.progress && (
                                                                                         <td className="px-3 py-2">
-                                                                                            <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                                                                                <div className={`h-full ${task.progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${task.progress}%` }}></div>
+                                                                                            <div className="flex items-center gap-2 justify-center">
+                                                                                                <div className="w-28"><ProgressBar value={task.progress} /></div>
+                                                                                                <span className="text-sm font-semibold text-gray-800 tabular-nums w-10 text-right">{task.progress}%</span>
                                                                                             </div>
-                                                                                            <div className="text-sm font-semibold text-gray-800 tabular-nums text-right">{task.progress}%</div>
                                                                                         </td>
                                                                                     )}
                                                                                     {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(getEffectiveStatus(task))}</td>}
+                                                                                    {visibleColumns.costCode && <td className="px-3 py-1.5 text-center text-xs text-gray-500">{task.costCode || '-'}</td>}
                                                                                     {visibleColumns.actions && (
                                                                                         <td className="px-3 py-1.5 sticky right-0 z-20 bg-inherit border-l border-gray-200">
                                                                                             <div className="flex items-center justify-center gap-1">
@@ -1835,6 +1922,7 @@ export default function ProjectDetailPage() {
                                                                     </td>
                                                                 )}
                                                                 {visibleColumns.status && <td className="px-3 py-1.5 text-center">{getStatusBadge(getEffectiveStatus(task))}</td>}
+                                                                {visibleColumns.costCode && <td className="px-3 py-1.5 text-center text-xs text-gray-500">{task.costCode || '-'}</td>}
                                                                 {visibleColumns.actions && (
                                                                     <td className="px-3 py-1.5 sticky right-0 z-20 bg-inherit border-l border-gray-200">
                                                                         <div className="flex items-center justify-center gap-1">
@@ -1995,6 +2083,21 @@ export default function ProjectDetailPage() {
 
                                     {/* Row 4: Details */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Cost Code</label>
+                                            <select
+                                                value={taskForm.costCode}
+                                                onChange={(e) => setTaskForm({ ...taskForm, costCode: e.target.value })}
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                            >
+                                                <option value="">เลือก Cost Code</option>
+                                                {COST_CODES.map((code) => (
+                                                    <option key={code.id} value={code.id}>
+                                                        {code.id} - {code.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">งบประมาณ (บาท)</label>
                                             <input

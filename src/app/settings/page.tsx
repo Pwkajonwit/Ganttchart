@@ -781,13 +781,13 @@ export default function SettingsPage() {
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6">
-                <div className="lg:w-56 flex-shrink-0">
-                    <div className="bg-white rounded-sm border border-gray-300 p-2">
+                <div className="lg:w-60 flex-shrink-0">
+                    <div className="bg-white rounded border border-gray-200 p-2 space-y-1">
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as TabType)}
-                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-sm text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50 border-l-2 border-transparent'}`}
                             >
                                 <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-400'}`} />
                                 {tab.label}
@@ -798,7 +798,7 @@ export default function SettingsPage() {
 
                 <div className="flex-1">
                     {activeTab === 'profile' && (
-                        <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
+                        <div className="bg-white rounded border border-gray-200 p-5 space-y-5">
                             <div>
                                 <h2 className="text-lg font-semibold text-gray-900">ข้อมูลโปรไฟล์</h2>
                                 <p className="text-gray-500 text-sm mt-0.5">แก้ไขข้อมูลส่วนตัวของคุณ</p>
@@ -822,7 +822,7 @@ export default function SettingsPage() {
                                             type="text"
                                             value={settings.profile.name}
                                             onChange={(e) => updateProfile('name', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -831,7 +831,7 @@ export default function SettingsPage() {
                                             type="text"
                                             value={settings.profile.position}
                                             onChange={(e) => updateProfile('position', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -840,7 +840,7 @@ export default function SettingsPage() {
                                             type="text"
                                             value={settings.profile.department}
                                             onChange={(e) => updateProfile('department', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
                                 </div>
@@ -852,7 +852,7 @@ export default function SettingsPage() {
                                             type="email"
                                             value={settings.profile.email}
                                             onChange={(e) => updateProfile('email', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -861,7 +861,7 @@ export default function SettingsPage() {
                                             type="tel"
                                             value={settings.profile.phone}
                                             onChange={(e) => updateProfile('phone', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
 
@@ -871,7 +871,7 @@ export default function SettingsPage() {
                     )}
 
                     {activeTab === 'notifications' && (
-                        <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
+                        <div className="bg-white rounded border border-gray-200 p-5 space-y-5">
                             <div>
                                 <h2 className="text-lg font-semibold text-gray-900">ตั้งค่าการแจ้งเตือน</h2>
                                 <p className="text-gray-500 text-sm mt-0.5">กำหนดช่องทางแจ้งเตือน และตั้งค่า LINE สำหรับพัฒนาต่อในอนาคต</p>
@@ -913,7 +913,7 @@ export default function SettingsPage() {
                                         <select
                                             value={settings.notifications.lineProvider}
                                             onChange={(e) => updateNotification('lineProvider', e.target.value as UserSettings['notifications']['lineProvider'])}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         >
                                             <option value="line-notify">LINE Notify (Legacy)</option>
                                             <option value="line-messaging-api">LINE Messaging API</option>
@@ -927,7 +927,7 @@ export default function SettingsPage() {
                                             value={settings.notifications.lineGroupId}
                                             onChange={(e) => updateNotification('lineGroupId', e.target.value)}
                                             placeholder="เช่น Cxxxxxxxxxxxxxxxx"
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
 
@@ -938,7 +938,7 @@ export default function SettingsPage() {
                                             value={settings.notifications.lineGroupName}
                                             onChange={(e) => updateNotification('lineGroupName', e.target.value)}
                                             placeholder="เช่น Site Project A"
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
 
@@ -949,7 +949,7 @@ export default function SettingsPage() {
                                             value={settings.notifications.lineToken}
                                             onChange={(e) => updateNotification('lineToken', e.target.value)}
                                             placeholder="ใส่ LINE token"
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
 
@@ -960,7 +960,7 @@ export default function SettingsPage() {
                                             value={settings.notifications.lineChannelAccessToken}
                                             onChange={(e) => updateNotification('lineChannelAccessToken', e.target.value)}
                                             placeholder="ใช้สำหรับ LINE Messaging API ในอนาคต"
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
 
@@ -971,7 +971,7 @@ export default function SettingsPage() {
                                             value={settings.notifications.lineUserId}
                                             onChange={(e) => updateNotification('lineUserId', e.target.value)}
                                             placeholder="เช่น Uxxxxxxxx หรือ Cxxxxxxxx"
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
                                 </div>
@@ -984,7 +984,7 @@ export default function SettingsPage() {
                     )}
 
                     {activeTab === 'company' && (
-                        <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
+                        <div className="bg-white rounded border border-gray-200 p-5 space-y-5">
                             <div>
                                 <h2 className="text-lg font-semibold text-gray-900">ข้อมูลบริษัท</h2>
                                 <p className="text-gray-500 text-sm mt-0.5">ตั้งค่าชื่อบริษัท เลขประจำตัวผู้เสียภาษี และโลโก้</p>
@@ -998,7 +998,7 @@ export default function SettingsPage() {
                                             type="text"
                                             value={settings.company.name}
                                             onChange={(e) => updateCompany('name', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -1007,7 +1007,7 @@ export default function SettingsPage() {
                                             type="text"
                                             value={settings.company.taxId}
                                             onChange={(e) => updateCompany('taxId', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black transition-colors"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -1058,7 +1058,7 @@ export default function SettingsPage() {
                     )}
 
                     {activeTab === 'system' && (
-                        <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
+                        <div className="bg-white rounded border border-gray-200 p-5 space-y-5">
                             <div>
                                 <h2 className="text-lg font-semibold text-gray-900">ตั้งค่าระบบ</h2>
                                 <p className="text-gray-500 text-sm mt-0.5">จัดการข้อมูลและการนำเข้า/ส่งออก</p>
@@ -1151,7 +1151,7 @@ export default function SettingsPage() {
 
                     {/* Placeholder for other tabs to keep layout intact if user clicks them */}
                     {activeTab !== 'profile' && activeTab !== 'notifications' && activeTab !== 'company' && activeTab !== 'system' && activeTab !== 'members' && (
-                        <div className="bg-white rounded-sm border border-gray-300 p-10 flex flex-col items-center text-center text-gray-500">
+                        <div className="bg-white rounded border border-gray-200 p-10 flex flex-col items-center text-center text-gray-500">
                             <Settings className="w-10 h-10 mb-4 text-gray-300" />
                             <p>ส่วนนี้ยังไม่เปิดให้แก้ไขในเวอร์ชัน Demo</p>
                         </div>
@@ -1159,7 +1159,7 @@ export default function SettingsPage() {
 
                     {/* Members Tab */}
                     {activeTab === 'members' && (
-                        <div className="bg-white rounded-sm border border-gray-300 p-6 space-y-6">
+                        <div className="bg-white rounded border border-gray-200 p-5 space-y-5">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h2 className="text-lg font-semibold text-gray-900">จัดการสมาชิก</h2>
@@ -1223,7 +1223,7 @@ export default function SettingsPage() {
                     {/* Add/Edit Member Modal */}
                     {isMemberModalOpen && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-sm border border-gray-400 shadow-none w-full max-w-md">
+                            <div className="bg-white rounded border border-gray-200 shadow-none w-full max-w-md">
                                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                                     <h2 className="text-lg font-semibold text-gray-900">
                                         {editingMember ? 'แก้ไขสมาชิก' : 'เพิ่มสมาชิกใหม่'}
@@ -1310,10 +1310,9 @@ export default function SettingsPage() {
                     )}
                 </div>
             </div>
-            {/* Alert/Confirm Modal */}
             {alertDialog.isOpen && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-lg border border-gray-200 shadow-none max-w-sm w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
                         <div className="p-6 text-center">
                             <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center ${alertDialog.type === 'error' ? 'bg-red-100 text-red-600' :
                                 alertDialog.type === 'success' ? 'bg-green-100 text-green-600' :
@@ -1344,7 +1343,7 @@ export default function SettingsPage() {
                                 )}
                                 <button
                                     onClick={alertDialog.onConfirm}
-                                    className={`px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-colors ${alertDialog.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                                    className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${alertDialog.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
                                         alertDialog.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
                                             alertDialog.type === 'warning' ? 'bg-orange-500 hover:bg-orange-600' :
                                                 'bg-black hover:bg-gray-800'

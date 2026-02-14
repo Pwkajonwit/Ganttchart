@@ -68,6 +68,8 @@ interface GanttToolbarProps {
         dueMaterialOnSiteDays: number;
         dateOfUseOffsetDays: number;
     }) => void;
+    onApplyProcurementOffsetsToAll?: () => Promise<void>;
+    isApplyingOffsets?: boolean;
 }
 
 export default function GanttToolbar({
@@ -99,8 +101,11 @@ export default function GanttToolbar({
     allowedViewModes = ['day', 'week', 'month'],
     isProcurementMode = false,
     procurementOffsets = { dueProcurementDays: -14, dueMaterialOnSiteDays: -7, dateOfUseOffsetDays: 0 },
-    onProcurementOffsetsChange
+    onProcurementOffsetsChange,
+    onApplyProcurementOffsetsToAll,
+    isApplyingOffsets = false
 }: GanttToolbarProps) {
+    const [dateEditMode, setDateEditMode] = React.useState<'all' | 'item'>('all');
     const [isBudgetEditing, setIsBudgetEditing] = React.useState(false);
     const [budgetInput, setBudgetInput] = React.useState('');
 
@@ -163,66 +168,66 @@ export default function GanttToolbar({
                 {/* KPI / Stats Minimalist View */}
                 {showHeaderStats && (
                     <div className="hidden lg:flex items-center gap-3">
-                    {!isProcurementMode && (
-                        <>
-                            <div className="flex min-w-[92px] flex-col">
-                                <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Budget</span>
-                                <div className="mt-0.5 flex items-baseline gap-1 leading-none" onDoubleClick={() => setIsBudgetEditing(true)}>
-                                    {isBudgetEditing ? (
-                                        <input
-                                            autoFocus
-                                            className="w-20 text-xs font-bold font-mono border-b border-blue-500 outline-none"
-                                            value={budgetInput}
-                                            onChange={(e) => setBudgetInput(e.target.value)}
-                                            onBlur={handleBudgetSubmit}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') handleBudgetSubmit(); }}
-                                        />
-                                    ) : (
-                                        <span className="text-base font-bold text-gray-900 font-mono hover:text-blue-600 cursor-pointer" title="Double click to edit">
-                                            {budgetStats.totalCost.toLocaleString()}
-                                        </span>
-                                    )}
-                                    <span className="text-[9px] text-gray-500 font-medium">THB</span>
+                        {!isProcurementMode && (
+                            <>
+                                <div className="flex min-w-[92px] flex-col">
+                                    <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Budget</span>
+                                    <div className="mt-0.5 flex items-baseline gap-1 leading-none" onDoubleClick={() => setIsBudgetEditing(true)}>
+                                        {isBudgetEditing ? (
+                                            <input
+                                                autoFocus
+                                                className="w-20 text-xs font-bold font-mono border-b border-blue-500 outline-none"
+                                                value={budgetInput}
+                                                onChange={(e) => setBudgetInput(e.target.value)}
+                                                onBlur={handleBudgetSubmit}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handleBudgetSubmit(); }}
+                                            />
+                                        ) : (
+                                            <span className="text-base font-bold text-gray-900 font-mono hover:text-blue-600 cursor-pointer" title="Double click to edit">
+                                                {budgetStats.totalCost.toLocaleString()}
+                                            </span>
+                                        )}
+                                        <span className="text-[9px] text-gray-500 font-medium">THB</span>
+                                    </div>
                                 </div>
+                                <div className="h-7 w-px bg-gray-200"></div>
+                            </>
+                        )}
+                        <div className="flex min-w-[72px] flex-col">
+                            <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Progress</span>
+                            <div className="mt-0.5 flex items-baseline gap-1 leading-none">
+                                <span className={`text-base font-bold font-mono ${kpiStats.progress > 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                                    {kpiStats.progress.toFixed(1)}%
+                                </span>
                             </div>
-                            <div className="h-7 w-px bg-gray-200"></div>
-                        </>
-                    )}
-                    <div className="flex min-w-[72px] flex-col">
-                        <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Progress</span>
-                        <div className="mt-0.5 flex items-baseline gap-1 leading-none">
-                            <span className={`text-base font-bold font-mono ${kpiStats.progress > 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                                {kpiStats.progress.toFixed(1)}%
-                            </span>
                         </div>
-                    </div>
-                    <div className="flex min-w-[82px] flex-col">
-                        <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Plan-to-Date</span>
-                        <div className="mt-0.5 flex items-baseline gap-1 leading-none">
-                            <span className="text-base font-bold font-mono text-gray-900">
-                                {kpiStats.planToDate.toFixed(1)}%
-                            </span>
+                        <div className="flex min-w-[82px] flex-col">
+                            <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Plan-to-Date</span>
+                            <div className="mt-0.5 flex items-baseline gap-1 leading-none">
+                                <span className="text-base font-bold font-mono text-gray-900">
+                                    {kpiStats.planToDate.toFixed(1)}%
+                                </span>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex min-w-[130px] flex-col">
-                        <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Variance</span>
-                        <div className="mt-0.5 flex items-baseline gap-1 leading-none">
-                            <span
-                                className={`text-base font-bold font-mono ${kpiStats.varianceDays === null
+                        <div className="flex min-w-[130px] flex-col">
+                            <span className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold leading-none">Variance</span>
+                            <div className="mt-0.5 flex items-baseline gap-1 leading-none">
+                                <span
+                                    className={`text-base font-bold font-mono ${kpiStats.varianceDays === null
                                         ? 'text-gray-500'
                                         : kpiStats.varianceDays > 0
                                             ? 'text-green-600'
                                             : kpiStats.varianceDays < 0
                                                 ? 'text-red-600'
                                                 : 'text-gray-700'
-                                    }`}
-                            >
-                                {kpiStats.varianceDays === null || kpiStats.variancePercent === null
-                                    ? '-'
-                                    : `${kpiStats.variancePercent > 0 ? '+' : ''}${kpiStats.variancePercent.toFixed(1)}% (${kpiStats.varianceDays > 0 ? '+' : ''}${kpiStats.varianceDays}d)`}
-                            </span>
+                                        }`}
+                                >
+                                    {kpiStats.varianceDays === null || kpiStats.variancePercent === null
+                                        ? '-'
+                                        : `${kpiStats.variancePercent > 0 ? '+' : ''}${kpiStats.variancePercent.toFixed(1)}% (${kpiStats.varianceDays > 0 ? '+' : ''}${kpiStats.varianceDays}d)`}
+                                </span>
+                            </div>
                         </div>
-                    </div>
                     </div>
                 )}
             </div>
@@ -266,53 +271,84 @@ export default function GanttToolbar({
                 {/* Action Tools */}
                 <div className="flex items-center gap-2">
                     {isProcurementMode && (
-                        <div className="hidden xl:flex items-center gap-2 mr-2 px-2 py-1 bg-gray-50 border border-gray-200 rounded-md">
-                            <span className="text-[10px] text-gray-500 font-semibold">Offset</span>
-                            <label className="flex items-center gap-1 text-[10px] text-gray-600">
-                                Proc.
-                                <input
-                                    type="number"
-                                    value={procurementOffsets.dueProcurementDays}
-                                    onChange={(e) =>
-                                        onProcurementOffsetsChange?.({
-                                            ...procurementOffsets,
-                                            dueProcurementDays: parseInt(e.target.value || '0', 10) || 0
-                                        })
-                                    }
-                                    className="w-12 h-6 px-1 text-[11px] border border-gray-300 rounded bg-white text-gray-700"
-                                    title="OffsetDue Proc."
-                                />
-                            </label>
-                            <label className="flex items-center gap-1 text-[10px] text-gray-600">
-                                On Site
-                                <input
-                                    type="number"
-                                    value={procurementOffsets.dueMaterialOnSiteDays}
-                                    onChange={(e) =>
-                                        onProcurementOffsetsChange?.({
-                                            ...procurementOffsets,
-                                            dueMaterialOnSiteDays: parseInt(e.target.value || '0', 10) || 0
-                                        })
-                                    }
-                                    className="w-12 h-6 px-1 text-[11px] border border-gray-300 rounded bg-white text-gray-700"
-                                    title="Offset???On Site"
-                                />
-                            </label>
-                            <label className="flex items-center gap-1 text-[10px] text-gray-600">
-                                Use
-                                <input
-                                    type="number"
-                                    value={procurementOffsets.dateOfUseOffsetDays}
-                                    onChange={(e) =>
-                                        onProcurementOffsetsChange?.({
-                                            ...procurementOffsets,
-                                            dateOfUseOffsetDays: parseInt(e.target.value || '0', 10) || 0
-                                        })
-                                    }
-                                    className="w-12 h-6 px-1 text-[11px] border border-gray-300 rounded bg-white text-gray-700"
-                                    title="Date of use offset days"
-                                />
-                            </label>
+                        <div className="hidden xl:flex items-center gap-2 mr-2 px-2 py-1 bg-white border border-gray-200 rounded-md shadow-sm">
+                            <span className="text-xs font-semibold text-gray-600">Date Mode</span>
+                            <button
+                                type="button"
+                                onClick={() => setDateEditMode('all')}
+                                className={`px-2.5 py-1 text-xs rounded border transition-colors ${dateEditMode === 'all'
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                    }`}
+                            >
+                                Apply All
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDateEditMode('item')}
+                                className={`px-2.5 py-1 text-xs rounded border transition-colors ${dateEditMode === 'item'
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                    }`}
+                            >
+                                Edit Per Item
+                            </button>
+
+                            {dateEditMode === 'all' && (
+                                <>
+                                    <div className="w-px h-4 bg-gray-200 mx-1"></div>
+                                    <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                                        Due
+                                        <input
+                                            type="number"
+                                            value={procurementOffsets.dueProcurementDays}
+                                            onChange={(e) =>
+                                                onProcurementOffsetsChange?.({
+                                                    ...procurementOffsets,
+                                                    dueProcurementDays: parseInt(e.target.value || '0', 10) || 0
+                                                })
+                                            }
+                                            className="w-12 h-7 text-xs border border-gray-300 rounded px-1 text-center"
+                                        />
+                                    </label>
+                                    <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                                        On Site
+                                        <input
+                                            type="number"
+                                            value={procurementOffsets.dueMaterialOnSiteDays}
+                                            onChange={(e) =>
+                                                onProcurementOffsetsChange?.({
+                                                    ...procurementOffsets,
+                                                    dueMaterialOnSiteDays: parseInt(e.target.value || '0', 10) || 0
+                                                })
+                                            }
+                                            className="w-12 h-7 text-xs border border-gray-300 rounded px-1 text-center"
+                                        />
+                                    </label>
+                                    <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                                        Use
+                                        <input
+                                            type="number"
+                                            value={procurementOffsets.dateOfUseOffsetDays}
+                                            onChange={(e) =>
+                                                onProcurementOffsetsChange?.({
+                                                    ...procurementOffsets,
+                                                    dateOfUseOffsetDays: parseInt(e.target.value || '0', 10) || 0
+                                                })
+                                            }
+                                            className="w-12 h-7 text-xs border border-gray-300 rounded px-1 text-center"
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={onApplyProcurementOffsetsToAll}
+                                        disabled={isApplyingOffsets}
+                                        className="ml-1 px-3 py-1.5 text-xs font-semibold rounded border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                    >
+                                        {isApplyingOffsets ? 'Applying...' : 'Apply To All'}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     )}
                     <button
@@ -368,18 +404,22 @@ export default function GanttToolbar({
                                     Show Columns
                                 </div>
                                 <div className="p-1">
-                                    <button onClick={() => onToggleColumn('cost')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                        <span className="flex items-center gap-3"><Wallet className="w-4 h-4 text-gray-400" /> Cost</span>
-                                        {visibleColumns.cost && <Check className="w-4 h-4 text-blue-600" />}
-                                    </button>
-                                    <button onClick={() => onToggleColumn('weight')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                        <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">W</span> Weight</span>
-                                        {visibleColumns.weight && <Check className="w-4 h-4 text-blue-600" />}
-                                    </button>
-                                    <button onClick={() => onToggleColumn('quantity')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                        <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">Q</span> Quantity</span>
-                                        {visibleColumns.quantity && <Check className="w-4 h-4 text-blue-600" />}
-                                    </button>
+                                    {!isProcurementMode && (
+                                        <>
+                                            <button onClick={() => onToggleColumn('cost')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                <span className="flex items-center gap-3"><Wallet className="w-4 h-4 text-gray-400" /> Cost</span>
+                                                {visibleColumns.cost && <Check className="w-4 h-4 text-blue-600" />}
+                                            </button>
+                                            <button onClick={() => onToggleColumn('weight')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">W</span> Weight</span>
+                                                {visibleColumns.weight && <Check className="w-4 h-4 text-blue-600" />}
+                                            </button>
+                                            <button onClick={() => onToggleColumn('quantity')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">Q</span> Quantity</span>
+                                                {visibleColumns.quantity && <Check className="w-4 h-4 text-blue-600" />}
+                                            </button>
+                                        </>
+                                    )}
                                     {isProcurementMode && (
                                         <>
                                             <button onClick={() => onToggleColumn('dueProcurement')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
@@ -387,11 +427,11 @@ export default function GanttToolbar({
                                                 {visibleColumns.dueProcurement && <Check className="w-4 h-4 text-blue-600" />}
                                             </button>
                                             <button onClick={() => onToggleColumn('dueMaterialOnSite')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                                <span className="flex items-center gap-3"><Calendar className="w-4 h-4 text-gray-400" /> ???On Site</span>
+                                                <span className="flex items-center gap-3"><Calendar className="w-4 h-4 text-gray-400" /> Due On Site</span>
                                                 {visibleColumns.dueMaterialOnSite && <Check className="w-4 h-4 text-blue-600" />}
                                             </button>
                                             <button onClick={() => onToggleColumn('dateOfUse')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                                <span className="flex items-center gap-3"><Calendar className="w-4 h-4 text-gray-400" /> Use Date</span>
+                                                <span className="flex items-center gap-3"><Calendar className="w-4 h-4 text-gray-400" /> Date of Use</span>
                                                 {visibleColumns.dateOfUse && <Check className="w-4 h-4 text-blue-600" />}
                                             </button>
                                             <button onClick={() => onToggleColumn('duration')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
@@ -404,30 +444,34 @@ export default function GanttToolbar({
                                             </button>
                                         </>
                                     )}
-                                    <button onClick={() => onToggleColumn('period')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                        <span className="flex items-center gap-3"><Calendar className="w-4 h-4 text-gray-400" /> Period</span>
-                                        {visibleColumns.period && <Check className="w-4 h-4 text-blue-600" />}
-                                    </button>
-                                    {Object.prototype.hasOwnProperty.call(visibleColumns, 'planDuration') && (
-                                        <button onClick={() => onToggleColumn('planDuration')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                            <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">P</span> Plan (d)</span>
-                                            {visibleColumns.planDuration && <Check className="w-4 h-4 text-blue-600" />}
-                                        </button>
+                                    {!isProcurementMode && (
+                                        <>
+                                            <button onClick={() => onToggleColumn('period')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                <span className="flex items-center gap-3"><Calendar className="w-4 h-4 text-gray-400" /> Period</span>
+                                                {visibleColumns.period && <Check className="w-4 h-4 text-blue-600" />}
+                                            </button>
+                                            {Object.prototype.hasOwnProperty.call(visibleColumns, 'planDuration') && (
+                                                <button onClick={() => onToggleColumn('planDuration')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                    <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">P</span> Plan (d)</span>
+                                                    {visibleColumns.planDuration && <Check className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            )}
+                                            {Object.prototype.hasOwnProperty.call(visibleColumns, 'actualDuration') && (
+                                                <button onClick={() => onToggleColumn('actualDuration')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                    <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">A</span> Actual (d)</span>
+                                                    {visibleColumns.actualDuration && <Check className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            )}
+                                            <button onClick={() => onToggleColumn('team')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                <span className="flex items-center gap-3"><Users className="w-4 h-4 text-gray-400" /> Team</span>
+                                                {visibleColumns.team && <Check className="w-4 h-4 text-blue-600" />}
+                                            </button>
+                                            <button onClick={() => onToggleColumn('progress')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                <span className="flex items-center gap-3"><TrendingUp className="w-4 h-4 text-gray-400" /> Progress (%)</span>
+                                                {visibleColumns.progress && <Check className="w-4 h-4 text-blue-600" />}
+                                            </button>
+                                        </>
                                     )}
-                                    {Object.prototype.hasOwnProperty.call(visibleColumns, 'actualDuration') && (
-                                        <button onClick={() => onToggleColumn('actualDuration')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                            <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">A</span> Actual (d)</span>
-                                            {visibleColumns.actualDuration && <Check className="w-4 h-4 text-blue-600" />}
-                                        </button>
-                                    )}
-                                    <button onClick={() => onToggleColumn('team')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                        <span className="flex items-center gap-3"><Users className="w-4 h-4 text-gray-400" /> Team</span>
-                                        {visibleColumns.team && <Check className="w-4 h-4 text-blue-600" />}
-                                    </button>
-                                    <button onClick={() => onToggleColumn('progress')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                        <span className="flex items-center gap-3"><TrendingUp className="w-4 h-4 text-gray-400" /> Progress (%)</span>
-                                        {visibleColumns.progress && <Check className="w-4 h-4 text-blue-600" />}
-                                    </button>
                                 </div>
 
                                 {/* Reference Date Config */}

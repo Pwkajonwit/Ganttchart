@@ -5,7 +5,7 @@ import { Download, FileSpreadsheet, FolderOpen, RotateCcw, Save, Trash2 } from '
 import { useAuth } from '@/contexts/AuthContext';
 import { deleteCsvTemplate, getCsvTemplates, saveCsvTemplate } from '@/lib/firestore';
 
-type MappingKey = 'cat' | 'task' | 'qty' | 'unit' | 'cost' | 'resp' | 'start' | 'end' | 'progress' | 'status';
+type MappingKey = 'cat' | 'task' | 'qty' | 'unit' | 'cost' | 'resp' | 'start' | 'end' | 'progress' | 'status' | 'costCode';
 
 interface Mappings {
   cat: string;
@@ -18,6 +18,7 @@ interface Mappings {
   end: string;
   progress: string;
   status: string;
+  costCode: string;
 }
 
 interface AutoScheduleState {
@@ -40,6 +41,7 @@ interface ProcessedRow {
   Duration: string | number;
   Progress: string;
   Status: string;
+  CostCode: string;
   Type: 'task';
 }
 
@@ -64,7 +66,8 @@ const DEFAULT_MAPPINGS: Mappings = {
   start: 'None',
   end: 'None',
   progress: 'None',
-  status: 'None'
+  status: 'None',
+  costCode: 'None'
 };
 
 const COLUMNS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -172,7 +175,7 @@ export default function ConvertCsvPage() {
   const processData = useMemo<ProcessedRow[]>(() => {
     if (!rawData.length) return [];
 
-    const { cat, task, qty, unit, cost, resp, start, end, progress, status } = mappings;
+    const { cat, task, qty, unit, cost, resp, start, end, progress, status, costCode } = mappings;
     const rows: ProcessedRow[] = [];
     let curCat = '';
     let curSub = '';
@@ -192,6 +195,7 @@ export default function ConvertCsvPage() {
       const vUnit = getColVal(row, unit);
       const vCost = getColVal(row, cost);
       const vResp = getColVal(row, resp);
+      const vCostCode = getColVal(row, costCode);
       const hasData = (vQty && vQty !== '0') || (vCost && vCost !== '0');
 
       if (vCat) {
@@ -256,6 +260,7 @@ export default function ConvertCsvPage() {
         Duration: duration,
         Progress: getColVal(row, progress) || '0',
         Status: getColVal(row, status) || 'not-started',
+        CostCode: vCostCode,
         Type: 'task'
       });
     }
@@ -307,10 +312,10 @@ export default function ConvertCsvPage() {
       alert('No data');
       return;
     }
-    const header = ['Category', 'Subcategory', 'SubSubcategory', 'Type', 'Task Name', 'Plan Start', 'Plan End', 'Duration (Days)', 'Cost', 'Quantity', 'Responsible', 'Progress (%)', 'Status'];
+    const header = ['Category', 'Subcategory', 'SubSubcategory', 'Type', 'Task Name', 'Plan Start', 'Plan End', 'Duration (Days)', 'Cost', 'Quantity', 'Responsible', 'Progress (%)', 'Status', 'Cost Code'];
     const wsData: Array<Array<string | number>> = [header];
     processData.forEach((r) => {
-      wsData.push([r.Category, r.SubCategory, r.SubSubCategory, r.Type, r.TaskName, r.PlanStart, r.PlanEnd, r.Duration, r.Cost, r.Quantity, r.Responsible, r.Progress, r.Status]);
+      wsData.push([r.Category, r.SubCategory, r.SubSubCategory, r.Type, r.TaskName, r.PlanStart, r.PlanEnd, r.Duration, r.Cost, r.Quantity, r.Responsible, r.Progress, r.Status, r.CostCode]);
     });
     const xlsx = await import('xlsx');
     const ws = xlsx.utils.aoa_to_sheet(wsData);
@@ -458,10 +463,10 @@ export default function ConvertCsvPage() {
         </div>
 
         <div className="grid grid-cols-10 gap-2 items-end">
-          {(['cat', 'task', 'qty', 'unit', 'cost', 'resp', 'start', 'end', 'status'] as const).map((key) => (
+          {(['cat', 'task', 'qty', 'unit', 'cost', 'resp', 'start', 'end', 'status', 'costCode'] as const).map((key) => (
             <div key={key} className={`flex flex-col gap-1 ${key === 'task' ? 'col-span-2' : ''}`}>
               <label className={`text-[10px] font-bold uppercase ${key === 'start' || key === 'end' || key === 'status' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {key === 'cat' ? 'Category' : key === 'task' ? 'Task Name' : key === 'qty' ? 'Qty' : key === 'unit' ? 'Unit' : key === 'cost' ? 'Cost' : key === 'resp' ? 'Responsible' : key === 'start' ? 'Start (Man)' : key === 'end' ? 'End (Man)' : 'Status'}
+                {key === 'cat' ? 'Category' : key === 'task' ? 'Task Name' : key === 'qty' ? 'Qty' : key === 'unit' ? 'Unit' : key === 'cost' ? 'Cost' : key === 'resp' ? 'Responsible' : key === 'start' ? 'Start (Man)' : key === 'end' ? 'End (Man)' : key === 'status' ? 'Status' : 'Cost Code'}
               </label>
               <select value={mappings[key]} onChange={(e) => updateMapping(key, e.target.value)} className={`w-full text-xs border border-slate-300 rounded h-7 px-1 ${key === 'start' || key === 'end' || key === 'status' ? 'text-slate-500 bg-slate-50' : ''}`}>
                 <option value="None">-- None --</option>
@@ -485,7 +490,7 @@ export default function ConvertCsvPage() {
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider sticky top-0 shadow-sm ring-1 ring-slate-200/50 z-10">
               <tr>
-                {['#', 'Category', 'Sub', 'Sub 2', 'Task Name', 'Qty', 'Cost', 'Resp.', 'Start', 'End', 'Dur.', 'Status'].map((h, idx) => (
+                {['#', 'Category', 'Sub', 'Sub 2', 'Task Name', 'Qty', 'Cost', 'Resp.', 'Start', 'End', 'Dur.', 'Status', 'Cost Code'].map((h, idx) => (
                   <th key={h} className={`px-4 py-3 bg-slate-50 border-b border-slate-200 ${idx === 0 ? 'w-12 text-left' : idx === 4 ? 'w-64 text-left' : idx === 5 || idx === 6 ? 'text-right' : idx === 10 ? 'text-center' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
@@ -493,9 +498,9 @@ export default function ConvertCsvPage() {
             <tbody className="text-xs text-slate-700 divide-y divide-slate-100">
               {processData.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-12 text-center text-slate-400 bg-slate-50/30">
+                  <td colSpan={13} className="px-6 py-12 text-center text-slate-400 bg-slate-50/30">
                     <div className="flex flex-col items-center gap-2">
-                          <FileSpreadsheet className="w-8 h-8 opacity-50" />
+                      <FileSpreadsheet className="w-8 h-8 opacity-50" />
                       <span>No Data Processed</span>
                     </div>
                   </td>
@@ -520,6 +525,7 @@ export default function ConvertCsvPage() {
                       <td className="px-4 py-2 border-b border-slate-100">
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium capitalize ${statusClass}`}>{row.Status}</span>
                       </td>
+                      <td className="px-4 py-2 border-b border-slate-100 text-slate-600 border-l border-slate-100">{row.CostCode}</td>
                     </tr>
                   );
                 })

@@ -60,6 +60,22 @@ export default function SCurveChart(props: SCurveChartProps) {
         return () => resizeObserver.disconnect();
     }, []);
 
+    // Scroll Sync for Right Axis
+    const axisScrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const mainContainer = scrollContainerRef.current;
+        const axisContainer = axisScrollRef.current;
+        if (!mainContainer || !axisContainer) return;
+
+        const handleScroll = () => {
+            axisContainer.style.transform = `translateY(-${mainContainer.scrollTop}px)`;
+        };
+
+        mainContainer.addEventListener('scroll', handleScroll);
+        return () => mainContainer.removeEventListener('scroll', handleScroll);
+    }, []);
+
+
     // 1. Timeline Logic (Reused from Gantt)
     const { timeRange, timeline, config } = useGanttTimeline({
         startDate,
@@ -194,10 +210,10 @@ export default function SCurveChart(props: SCurveChartProps) {
     };
 
     // Columns
-    const defaultVisibleColumns: VisibleColumns = { cost: true, weight: true, progress: true, quantity: true, period: true, team: true, planDuration: false, actualDuration: false };
+    const defaultVisibleColumns: VisibleColumns = { cost: true, weight: true, progress: true, quantity: false, period: false, team: false, planDuration: false, actualDuration: false };
     const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>(() => {
         if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('scurve-visible-columns');
+            const saved = localStorage.getItem('scurve-visible-columns-v3');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved) as Partial<VisibleColumns>;
@@ -209,7 +225,7 @@ export default function SCurveChart(props: SCurveChartProps) {
     });
 
     useEffect(() => {
-        if (typeof window !== 'undefined') localStorage.setItem('scurve-visible-columns', JSON.stringify(visibleColumns));
+        if (typeof window !== 'undefined') localStorage.setItem('scurve-visible-columns-v3', JSON.stringify(visibleColumns));
     }, [visibleColumns]);
 
     useEffect(() => {
@@ -244,8 +260,8 @@ export default function SCurveChart(props: SCurveChartProps) {
     const stickyWidth = useMemo(() => {
         let w = 250;
         if (visibleColumns.cost) w += 80;
-        if (visibleColumns.weight) w += 56;
-        if (visibleColumns.quantity) w += 64;
+        if (visibleColumns.weight) w += 64;
+        if (visibleColumns.quantity) w += 80;
         if (visibleColumns.period) w += 150;
         if (visibleColumns.team) w += 92;
         if (visibleColumns.planDuration) w += 60;
@@ -402,9 +418,9 @@ export default function SCurveChart(props: SCurveChartProps) {
                             )}
                         </div>
                     )}
-                    {visibleColumns.weight && <div className="w-14 text-right text-xs text-gray-600 font-mono shrink-0">{getTaskWeight(task).toFixed(2)}%</div>}
+                    {visibleColumns.weight && <div className="w-16 text-right text-xs text-gray-600 font-mono shrink-0">{getTaskWeight(task).toFixed(2)}%</div>}
                     {visibleColumns.quantity && (
-                        <div className="w-16 text-right text-xs text-gray-600 font-mono shrink-0 bg-yellow-50/50 px-1 rounded mx-1">
+                        <div className="w-20 text-right text-xs text-gray-600 font-mono shrink-0 bg-yellow-50/50 px-1 rounded mx-1">
                             {onTaskUpdate ? (
                                 <input
                                     className="w-full text-right bg-transparent border-b border-transparent hover:border-blue-300 focus:border-blue-500 outline-none transition-colors"
@@ -432,6 +448,8 @@ export default function SCurveChart(props: SCurveChartProps) {
                             )}
                         </div>
                     )}
+                    {visibleColumns.planDuration && <div className="w-[60px] text-right text-xs text-gray-600 font-mono shrink-0 px-1">{differenceInDays(parseDate(task.planEndDate), parseDate(task.planStartDate)) + 1}d</div>}
+                    {visibleColumns.actualDuration && <div className="w-[60px] text-right text-xs text-green-600 font-mono shrink-0 px-1">{task.actualStartDate && task.actualEndDate ? differenceInDays(parseDate(task.actualEndDate), parseDate(task.actualStartDate)) + 1 : '-'}d</div>}
                     {visibleColumns.period && (
                         <div className="w-[150px] text-right text-[10px] font-mono shrink-0 px-2 flex flex-col justify-center leading-tight">
                             <div className="text-gray-600">
@@ -439,8 +457,6 @@ export default function SCurveChart(props: SCurveChartProps) {
                             </div>
                         </div>
                     )}
-                    {visibleColumns.planDuration && <div className="w-[60px] text-right text-xs text-gray-600 font-mono shrink-0 px-1">{differenceInDays(parseDate(task.planEndDate), parseDate(task.planStartDate)) + 1}d</div>}
-                    {visibleColumns.actualDuration && <div className="w-[60px] text-right text-xs text-green-600 font-mono shrink-0 px-1">{task.actualStartDate && task.actualEndDate ? differenceInDays(parseDate(task.actualEndDate), parseDate(task.actualStartDate)) + 1 : '-'}d</div>}
                     {visibleColumns.team && (
                         <div className="w-[92px] shrink-0 flex items-center pl-1">
                             {assignedEmployees.length > 0 ? (
@@ -479,11 +495,10 @@ export default function SCurveChart(props: SCurveChartProps) {
                     )}
                     {visibleColumns.progress && <div className="w-20 text-right text-xs text-gray-600 font-mono shrink-0 pr-4">{(task.progress || 0)}%</div>}
                 </div>
-                <div className="shrink-0" style={{ width: `${timelineWidth}px`, minWidth: `${timelineWidth}px` }}></div>
-            </div>
+                <div className="shrink-0 pointer-events-none" style={{ width: `${timelineWidth}px`, minWidth: `${timelineWidth}px` }}></div>
+            </div >
         );
     };
-
     return (
         <div className={`relative flex flex-col bg-white border border-gray-300 w-full max-w-full overflow-hidden font-sans ${isExpanded
             ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none'
@@ -593,7 +608,7 @@ export default function SCurveChart(props: SCurveChartProps) {
                                                     </div>
                                                 </div>
                                                 <div
-                                                    className="shrink-0 bg-transparent"
+                                                    className="shrink-0 bg-transparent pointer-events-none"
                                                     style={{ width: `${timelineWidth}px`, minWidth: `${timelineWidth}px` }}
                                                 ></div>
                                             </div>
@@ -637,7 +652,7 @@ export default function SCurveChart(props: SCurveChartProps) {
                                                                         </button>
                                                                     </div>
                                                                     <div
-                                                                        className="shrink-0 bg-transparent"
+                                                                        className="shrink-0 bg-transparent pointer-events-none"
                                                                         style={{ width: `${timelineWidth}px`, minWidth: `${timelineWidth}px` }}
                                                                     ></div>
                                                                 </div>
@@ -678,7 +693,7 @@ export default function SCurveChart(props: SCurveChartProps) {
                                                                                             </button>
                                                                                         </div>
                                                                                         <div
-                                                                                            className="shrink-0 bg-transparent"
+                                                                                            className="shrink-0 bg-transparent pointer-events-none"
                                                                                             style={{ width: `${timelineWidth}px`, minWidth: `${timelineWidth}px` }}
                                                                                         ></div>
                                                                                     </div>
@@ -725,13 +740,12 @@ export default function SCurveChart(props: SCurveChartProps) {
                     </div>
                 </div>
 
-                {/* Fixed Right Axis Overlay */}
-                <div className="absolute w-[50px] pointer-events-none z-20 border-l border-gray-100 bg-white/20"
-                    style={{ top: `${axisTopOffset}px`, left: `${stickyWidth + timelineWidth - 50}px`, height: `${graphHeight}px` }}>
-                    {/* Axis Labels */}
-                    <div className="relative w-full h-full">
+                {/* Fixed Right Axis Overlay (Synced Scroll) */}
+                <div className="absolute right-0 z-[90] w-[50px] pointer-events-none border-l border-gray-100/50 bg-white/30 backdrop-blur-[1px] overflow-hidden"
+                    style={{ top: `${axisTopOffset}px`, bottom: 0 }}>
+                    <div ref={axisScrollRef} className="relative w-full" style={{ height: `${graphHeight}px` }}>
                         {[0, 25, 50, 75, 100].map(val => (
-                            <div key={val} className="absolute right-1 text-[10px] text-gray-500 font-medium"
+                            <div key={val} className="absolute right-2 text-[10px] text-gray-500 font-medium bg-white/30 px-0.5 rounded"
                                 style={{ bottom: `${val}%`, transform: 'translateY(50%)' }}>
                                 {val}
                             </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, ChevronDown, Plus, AlertTriangle, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, AlertTriangle, X, Calendar } from 'lucide-react';
 import { Task, Employee } from '@/types/construction';
 import { createPortal } from 'react-dom';
 import { ViewMode, GanttConfig, DragState, RowDragState, VisibleColumns, DateRange } from './types';
@@ -199,58 +199,76 @@ export const TaskRow: React.FC<TaskRowProps> = ({
     };
 
     const procurementDates = React.useMemo(() => {
-        if (!t.planStartDate) {
-            return {
-                dueProcurement: '-',
-                dueMaterialOnSite: '-',
-                dateOfUse: '-',
-                durationDays: '-',
-                statusKey: 'to-order' as const,
-                statusLabel: '-'
-            };
+        // Prepare base values
+        let dueProcrurementVal = '-';
+        let dueMaterialOnSiteVal = '-';
+        let dateOfUseVal = '-';
+        let durationDaysVal = '-';
+
+        // 1. If manual dates exist in task, use them
+        if (t.dueProcurementDate) dueProcrurementVal = formatDateTH(t.dueProcurementDate);
+        if (t.dueMaterialOnSiteDate) dueMaterialOnSiteVal = formatDateTH(t.dueMaterialOnSiteDate);
+        if (t.dateOfUse) dateOfUseVal = formatDateTH(t.dateOfUse);
+
+        // 2. If no manual dates, fallback to auto-calc IF planStartDate exists
+        if (t.planStartDate) {
+            try {
+                const start = parseISO(t.planStartDate);
+                if (!t.dueProcurementDate) {
+                    dueProcrurementVal = formatDateTH(format(addDays(start, procurementOffsets.dueProcurementDays), 'yyyy-MM-dd')) + '*'; // Add * to indicate auto
+                }
+                if (!t.dueMaterialOnSiteDate) {
+                    dueMaterialOnSiteVal = formatDateTH(format(addDays(start, procurementOffsets.dueMaterialOnSiteDays), 'yyyy-MM-dd')) + '*';
+                }
+                if (!t.dateOfUse) {
+                    dateOfUseVal = formatDateTH(format(addDays(start, procurementOffsets.dateOfUseOffsetDays), 'yyyy-MM-dd')) + '*';
+                }
+                durationDaysVal = String(getTaskDurationValue(t));
+            } catch {
+                // Keep defaults
+            }
         }
 
-        try {
-            const start = parseISO(t.planStartDate);
-            const dueProcurement = formatDateTH(format(addDays(start, procurementOffsets.dueProcurementDays), 'yyyy-MM-dd'));
-            const dueMaterialOnSite = formatDateTH(format(addDays(start, procurementOffsets.dueMaterialOnSiteDays), 'yyyy-MM-dd'));
-            const dateOfUse = formatDateTH(format(addDays(start, procurementOffsets.dateOfUseOffsetDays), 'yyyy-MM-dd'));
-            const durationDays = String(getTaskDurationValue(t));
-            const statusKey = t.procurementStatus
-                ? normalizeProcStatus(t.procurementStatus)
-                : (t.status === 'completed'
-                    ? 'ready'
-                    : t.status === 'in-progress'
-                        ? 'ordered'
-                        : 'to-order');
-            const statusLabel = getProcStatusLabelTH(statusKey);
+        const statusKey = t.procurementStatus
+            ? normalizeProcStatus(t.procurementStatus)
+            : (t.status === 'completed'
+                ? 'ready'
+                : t.status === 'in-progress'
+                    ? 'ordered'
+                    : 'to-order');
+        const statusLabel = getProcStatusLabelTH(statusKey);
 
-            return { dueProcurement, dueMaterialOnSite, dateOfUse, durationDays, statusKey, statusLabel };
-        } catch {
-            return {
-                dueProcurement: '-',
-                dueMaterialOnSite: '-',
-                dateOfUse: '-',
-                durationDays: '-',
-                statusKey: 'to-order' as const,
-                statusLabel: '-'
-            };
-        }
+        return {
+            dueProcurement: dueProcrurementVal,
+            dueMaterialOnSite: dueMaterialOnSiteVal,
+            dateOfUse: dateOfUseVal,
+            durationDays: durationDaysVal,
+            statusKey,
+            statusLabel
+        };
     }, [t, procurementOffsets]);
 
     const procurementMarkerDates = React.useMemo(() => {
         if (!isProcurementMode || !t.planStartDate || isGroup) return null;
         try {
             const start = parseISO(t.planStartDate);
-            return {
-                dueProcurement: addDays(start, procurementOffsets.dueProcurementDays),
-                dueMaterialOnSite: addDays(start, procurementOffsets.dueMaterialOnSiteDays),
-                dateOfUse: addDays(start, procurementOffsets.dateOfUseOffsetDays)
-            };
+
+            // Calculate defaults
+            let dueProcurement = addDays(start, procurementOffsets.dueProcurementDays);
+            let dueMaterialOnSite = addDays(start, procurementOffsets.dueMaterialOnSiteDays);
+            let dateOfUse = addDays(start, procurementOffsets.dateOfUseOffsetDays);
+
+            // Override with manual dates if set
+            if (t.dueProcurementDate) dueProcurement = parseISO(t.dueProcurementDate);
+            if (t.dueMaterialOnSiteDate) dueMaterialOnSite = parseISO(t.dueMaterialOnSiteDate);
+            if (t.dateOfUse) dateOfUse = parseISO(t.dateOfUse);
+
+            return { dueProcurement, dueMaterialOnSite, dateOfUse };
         } catch {
             return null;
         }
-    }, [isProcurementMode, isGroup, t.planStartDate, procurementOffsets]);
+    }, [isProcurementMode, isGroup, t.planStartDate, procurementOffsets, t.dueProcurementDate, t.dueMaterialOnSiteDate, t.dateOfUse]);
+
 
     const getDateLeftPx = React.useCallback((date: Date) => {
         const dayOffset = differenceInDays(date, timeRange.start);
@@ -436,39 +454,93 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                             {isGroup ? (groupSummary?.count ? `${groupSummary.count} items` : '-') : (t.quantity || '-')}
                         </div>
                     )}
-                    {visibleColumns.dueProcurement && (
-                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
+                    {isProcurementMode && visibleColumns.dueProcurement && (
+                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 relative group/date">
                             {isGroup ? '-' : (
-                                <span title="Auto from Start + offset days">
-                                    {procurementDates.dueProcurement}
-                                </span>
+                                <>
+                                    <div className="flex items-center w-full pr-1">
+                                        <span
+                                            className={`truncate ${!t.dueProcurementDate ? 'text-gray-400' : 'text-gray-700'}`}
+                                            title={t.dueProcurementDate ? `Manual: ${t.dueProcurementDate}` : "Auto-calculated"}
+                                        >
+                                            {procurementDates.dueProcurement.replace('*', '')}
+                                            {!t.dueProcurementDate && '*'}
+                                        </span>
+                                        <Calendar className="w-3 h-3 text-gray-400 ml-auto flex-shrink-0" />
+                                    </div>
+                                    {onTaskUpdate && (
+                                        <input
+                                            type="date"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            value={t.dueProcurementDate || ''}
+                                            onChange={(e) => onTaskUpdate(t.id, { dueProcurementDate: e.target.value })}
+                                            title="Click to set date"
+                                        />
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
-                    {visibleColumns.dueMaterialOnSite && (
-                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
+                    {isProcurementMode && visibleColumns.dueMaterialOnSite && (
+                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 relative group/date">
                             {isGroup ? '-' : (
-                                <span title="Auto from Start + offset days">
-                                    {procurementDates.dueMaterialOnSite}
-                                </span>
+                                <>
+                                    <div className="flex items-center w-full pr-1">
+                                        <span
+                                            className={`truncate ${!t.dueMaterialOnSiteDate ? 'text-gray-400' : 'text-gray-700'}`}
+                                            title={t.dueMaterialOnSiteDate ? `Manual: ${t.dueMaterialOnSiteDate}` : "Auto-calculated"}
+                                        >
+                                            {procurementDates.dueMaterialOnSite.replace('*', '')}
+                                            {!t.dueMaterialOnSiteDate && '*'}
+                                        </span>
+                                        <Calendar className="w-3 h-3 text-gray-400 ml-auto flex-shrink-0" />
+                                    </div>
+                                    {onTaskUpdate && (
+                                        <input
+                                            type="date"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            value={t.dueMaterialOnSiteDate || ''}
+                                            onChange={(e) => onTaskUpdate(t.id, { dueMaterialOnSiteDate: e.target.value })}
+                                            title="Click to set date"
+                                        />
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
-                    {visibleColumns.dateOfUse && (
-                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
+                    {isProcurementMode && visibleColumns.dateOfUse && (
+                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 relative group/date">
                             {isGroup ? '-' : (
-                                <span title="Auto from Start + offset days">
-                                    {procurementDates.dateOfUse}
-                                </span>
+                                <>
+                                    <div className="flex items-center w-full pr-1">
+                                        <span
+                                            className={`truncate ${!t.dateOfUse ? 'text-gray-400' : 'text-gray-700'}`}
+                                            title={t.dateOfUse ? `Manual: ${t.dateOfUse}` : "Auto-calculated"}
+                                        >
+                                            {procurementDates.dateOfUse.replace('*', '')}
+                                            {!t.dateOfUse && '*'}
+                                        </span>
+                                        <Calendar className="w-3 h-3 text-gray-400 ml-auto flex-shrink-0" />
+                                    </div>
+                                    {onTaskUpdate && (
+                                        <input
+                                            type="date"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            value={t.dateOfUse || ''}
+                                            onChange={(e) => onTaskUpdate(t.id, { dateOfUse: e.target.value })}
+                                            title="Click to set date"
+                                        />
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
-                    {visibleColumns.duration && (
+                    {isProcurementMode && visibleColumns.duration && (
                         <div className="w-[62px] h-full flex items-center justify-end border-l border-gray-300/70 text-[11px] text-gray-700 font-semibold font-mono shrink-0 pr-2 truncate">
                             {isGroup ? '-' : procurementDates.durationDays}
                         </div>
                     )}
-                    {visibleColumns.procurementStatus && (
+                    {isProcurementMode && visibleColumns.procurementStatus && (
                         <div className="w-[96px] h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2">
                             {isGroup ? (
                                 <span className="text-[10px] text-gray-500">-</span>
@@ -696,8 +768,8 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                                 ${isFourWeekView && viewMode === 'day'
                                     ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
                                     : viewMode === 'week'
-                                    ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                    : 'border-r border-dashed border-gray-300/60'}
+                                        ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                        : 'border-r border-dashed border-gray-300/60'}
                                 ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''}
                                 ${viewMode === 'day' && isToday(item) ? 'bg-blue-50/20' : ''}`}
                                 style={{ width: config.cellWidth }} />

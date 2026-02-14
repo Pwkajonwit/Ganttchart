@@ -38,6 +38,18 @@ interface GanttChartProps {
     allowedViewModes?: ViewMode[];
     isFourWeekView?: boolean;
     isProcurementMode?: boolean;
+    procurementOffsets?: {
+        dueProcurementDays: number;
+        dueMaterialOnSiteDays: number;
+        dateOfUseOffsetDays: number;
+    };
+    onProcurementOffsetsChange?: (offsets: {
+        dueProcurementDays: number;
+        dueMaterialOnSiteDays: number;
+        dateOfUseOffsetDays: number;
+    }) => void;
+    onApplyProcurementOffsetsToAll?: () => Promise<void>;
+    isApplyingOffsets?: boolean;
 }
 
 export default function GanttChart({
@@ -60,7 +72,11 @@ export default function GanttChart({
     isSavingOrder = false,
     allowedViewModes = ['day', 'week', 'month'],
     isFourWeekView = false,
-    isProcurementMode = false
+    isProcurementMode = false,
+    procurementOffsets = { dueProcurementDays: -14, dueMaterialOnSiteDays: -7, dateOfUseOffsetDays: 0 },
+    onProcurementOffsetsChange,
+    onApplyProcurementOffsetsToAll,
+    isApplyingOffsets = false
 }: GanttChartProps) {
 
     // Optimistic State
@@ -135,7 +151,7 @@ export default function GanttChart({
         quantity: false,
         period: !isProcurementMode,
         team: false,
-        progress: true,
+        progress: !isProcurementMode,
         dueProcurement: isProcurementMode,
         dueMaterialOnSite: isProcurementMode,
         dateOfUse: isProcurementMode,
@@ -143,7 +159,7 @@ export default function GanttChart({
         procurementStatus: isProcurementMode
     };
     const visibleColumnsStorageKey = isProcurementMode
-        ? 'gantt_visibleColumns_procurement_v1'
+        ? 'gantt_visibleColumns_procurement_v2'
         : 'gantt_visibleColumns_v3';
     const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>(() => {
         if (typeof window !== 'undefined') {
@@ -197,32 +213,6 @@ export default function GanttChart({
         }
         return null;
     });
-    const [procurementOffsets, setProcurementOffsets] = useState<{
-        dueProcurementDays: number;
-        dueMaterialOnSiteDays: number;
-        dateOfUseOffsetDays: number;
-    }>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('gantt_procurement_offsets_v1');
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved) as Partial<{
-                        dueProcurementDays: number;
-                        dueMaterialOnSiteDays: number;
-                        dateOfUseOffsetDays: number;
-                    }>;
-                    return {
-                        dueProcurementDays: parsed.dueProcurementDays ?? -14,
-                        dueMaterialOnSiteDays: parsed.dueMaterialOnSiteDays ?? -7,
-                        dateOfUseOffsetDays: parsed.dateOfUseOffsetDays ?? 0
-                    };
-                } catch {
-                    return { dueProcurementDays: -14, dueMaterialOnSiteDays: -7, dateOfUseOffsetDays: 0 };
-                }
-            }
-        }
-        return { dueProcurementDays: -14, dueMaterialOnSiteDays: -7, dateOfUseOffsetDays: 0 };
-    });
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -230,10 +220,6 @@ export default function GanttChart({
             else localStorage.removeItem('gantt_customDate');
         }
     }, [customDate]);
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        localStorage.setItem('gantt_procurement_offsets_v1', JSON.stringify(procurementOffsets));
-    }, [procurementOffsets]);
 
     // Color Management
     const [categoryColors, setCategoryColors] = useState<Record<string, string>>({});
@@ -656,20 +642,22 @@ export default function GanttChart({
     const offsetY = startIndex * ROW_HEIGHT;
 
     const stickyWidth = useMemo(() => {
-        let w = 300; // Increased base width for Name
+        let w = 280; // Adjusted base width for Name
         if (visibleColumns.cost) w += 80;
         if (visibleColumns.weight) w += 64; // w-16
         if (visibleColumns.quantity) w += 80; // w-20
-        if (visibleColumns.dueProcurement) w += 78;
-        if (visibleColumns.dueMaterialOnSite) w += 78;
-        if (visibleColumns.dateOfUse) w += 78;
-        if (visibleColumns.duration) w += 62;
-        if (visibleColumns.procurementStatus) w += 96;
+        if (isProcurementMode && visibleColumns.dueProcurement) w += 78;
+        if (isProcurementMode && visibleColumns.dueMaterialOnSite) w += 78;
+        if (isProcurementMode && visibleColumns.dateOfUse) w += 78;
+        if (isProcurementMode && visibleColumns.duration) w += 62;
+        if (isProcurementMode && visibleColumns.procurementStatus) w += 96;
+        if (visibleColumns.planDuration) w += 60;
+        if (visibleColumns.actualDuration) w += 60;
         if (visibleColumns.period) w += 150; // w-[150px]
         if (visibleColumns.team) w += EMPLOYEE_COL_WIDTH;
         if (visibleColumns.progress) w += 80;
-        return w + 30;
-    }, [visibleColumns, EMPLOYEE_COL_WIDTH]);
+        return w + 30; // buffer
+    }, [visibleColumns, EMPLOYEE_COL_WIDTH, isProcurementMode]);
 
     // PDF Export
     const { containerRef: chartContainerRef, exportToPdf: handleExportPDF } = usePdfExport({ title, pageSize: 'A3', orientation: 'landscape' });
@@ -958,8 +946,8 @@ export default function GanttChart({
         <div
             ref={chartContainerRef}
             className={`relative flex flex-col bg-white border border-gray-300 w-full max-w-full overflow-hidden font-sans ${isExpanded
-                    ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none'
-                    : 'h-[750px] rounded'
+                ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none'
+                : 'h-[750px] rounded'
                 }`}
         >
             <GanttToolbar
@@ -995,7 +983,9 @@ export default function GanttChart({
                 onToggleExpand={() => setIsExpanded(prev => !prev)}
                 isProcurementMode={isProcurementMode}
                 procurementOffsets={procurementOffsets}
-                onProcurementOffsetsChange={setProcurementOffsets}
+                onProcurementOffsetsChange={onProcurementOffsetsChange}
+                onApplyProcurementOffsetsToAll={onApplyProcurementOffsetsToAll}
+                isApplyingOffsets={isApplyingOffsets}
             />
 
             {/* Drag Snap Tooltip */}
@@ -1118,19 +1108,19 @@ export default function GanttChart({
                                                         -
                                                     </div>
                                                 )}
-                                                {visibleColumns.dueProcurement && (
+                                                {isProcurementMode && visibleColumns.dueProcurement && (
                                                     <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
                                                 )}
-                                                {visibleColumns.dueMaterialOnSite && (
+                                                {isProcurementMode && visibleColumns.dueMaterialOnSite && (
                                                     <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
                                                 )}
-                                                {visibleColumns.dateOfUse && (
+                                                {isProcurementMode && visibleColumns.dateOfUse && (
                                                     <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
                                                 )}
-                                                {visibleColumns.duration && (
+                                                {isProcurementMode && visibleColumns.duration && (
                                                     <div className="w-[62px] h-full flex items-center justify-end border-l border-gray-300/70 text-[10px] shrink-0 pr-2 truncate">-</div>
                                                 )}
-                                                {visibleColumns.procurementStatus && (
+                                                {isProcurementMode && visibleColumns.procurementStatus && (
                                                     <div className="w-[96px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
                                                 )}
                                                 {visibleColumns.period && (
@@ -1162,8 +1152,8 @@ export default function GanttChart({
                                                             ${isFourWeekView && viewMode === 'day'
                                                                 ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
                                                                 : viewMode === 'week'
-                                                                ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                                                : 'border-r border-dashed border-gray-300/60'}
+                                                                    ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                                                    : 'border-r border-dashed border-gray-300/60'}
                                                             ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''}`}
                                                             style={{ width: config.cellWidth }} />
                                                     ))}
@@ -1324,11 +1314,11 @@ export default function GanttChart({
                                                                 {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subSummary.totalCost || 0).toLocaleString()}</div>}
                                                                 {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subSummary.totalWeight || 0).toFixed(2)}%</div>}
                                                                 {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-20 shrink-0 text-left pl-2 truncate"></div>}
-                                                                {visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
                                                                 {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[150px] shrink-0 text-[10px] text-gray-600 font-mono text-left pl-2 truncate">
                                                                     {subDateRange ? formatDateRange(subDateRange.start, subDateRange.end) : '-'}
                                                                 </div>}
@@ -1353,8 +1343,8 @@ export default function GanttChart({
                                                                         ${isFourWeekView && viewMode === 'day'
                                                                             ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
                                                                             : viewMode === 'week'
-                                                                            ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                                                            : 'border-r border-dashed border-gray-300/60'}
+                                                                                ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                                                                : 'border-r border-dashed border-gray-300/60'}
                                                                         ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/35' : item.getDay() === 0 ? 'bg-red-50/35' : '') : ''}`}
                                                                         style={{ width: config.cellWidth }} />
                                                                 ))}
@@ -1477,11 +1467,11 @@ export default function GanttChart({
                                                                 {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subsubSummary.totalCost || 0).toLocaleString()}</div>}
                                                                 {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subsubSummary.totalWeight || 0).toFixed(2)}%</div>}
                                                                 {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-20 shrink-0 text-left pl-2 truncate"></div>}
-                                                                {visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                {isProcurementMode && visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
                                                                 {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[150px] shrink-0 text-[9px] text-gray-500 font-mono text-left pl-2 truncate">
                                                                     {subsubDateRange ? formatDateRange(subsubDateRange.start, subsubDateRange.end) : '-'}
                                                                 </div>}
@@ -1506,8 +1496,8 @@ export default function GanttChart({
                                                                         ${isFourWeekView && viewMode === 'day'
                                                                             ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
                                                                             : viewMode === 'week'
-                                                                            ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                                                            : 'border-r border-dashed border-gray-300/60'}
+                                                                                ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                                                                : 'border-r border-dashed border-gray-300/60'}
                                                                         ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/30' : item.getDay() === 0 ? 'bg-red-50/30' : '') : ''}`}
                                                                         style={{ width: config.cellWidth }} />
                                                                 ))}

@@ -21,7 +21,10 @@ import {
     Loader2,
     AlertTriangle,
     BarChart3,
-    GanttChartSquare
+    GanttChartSquare,
+    ShoppingBag,
+    CalendarDays,
+    ListTodo
 } from 'lucide-react';
 import { Project } from '@/types/construction';
 import { getProjects, createProject, updateProject, deleteProject } from '@/lib/firestore';
@@ -333,150 +336,178 @@ export default function ProjectsPage() {
                     </div>
                 ) : viewMode === 'grid' ? (
                     /* Projects Grid */
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {filteredProjects.map((project) => {
                             const statusConfig = getStatusConfig(project.status);
-                            const isCompleted = project.status === 'completed';
-                            const isOnHold = project.status === 'on-hold';
+
+                            // Calculate days remaining/duration for display
+                            const duration = Math.max(0, differenceInDays(parseISO(project.endDate), parseISO(project.startDate)) + 1);
 
                             return (
                                 <div
                                     key={project.id}
-                                    className={`
-                                        rounded-sm border p-5 transition-all group relative overflow-hidden bg-white
-                                        ${isCompleted ? 'border-green-300 hover:border-green-500' :
-                                            isOnHold ? 'border-amber-300 opacity-90 hover:border-amber-500' :
-                                                'border-gray-200 hover:border-gray-600'}
-                                    `}
+                                    className="group relative bg-white rounded-lg border border-gray-200 transition-all duration-300 flex flex-col overflow-hidden"
                                 >
-                                    {isCompleted && (
-                                        <div className="absolute right-0 top-0 w-20 h-20 overflow-hidden pointer-events-none">
-                                            <div className="absolute top-[10px] right-[-30px] w-[100px] h-[30px] bg-green-500/10 -rotate-45 transform" />
-                                        </div>
-                                    )}
+                                    {/* Status Stripe (Left) */}
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 transition-colors ${project.status === 'completed' ? 'bg-green-500' :
+                                        project.status === 'in-progress' ? 'bg-blue-600' :
+                                            project.status === 'on-hold' ? 'bg-amber-500' : 'bg-gray-300'
+                                        }`} />
 
-                                    {/* Header */}
-                                    <div className="flex items-start justify-between mb-3 relative z-10">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center
-                                                ${isCompleted ? 'bg-green-100 text-green-600' :
-                                                    isOnHold ? 'bg-amber-100 text-amber-600' :
-                                                        'bg-blue-50 text-blue-600'}
-                                            `}>
-                                                <Building2 className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h3 className={`font-medium ${isCompleted ? 'text-green-900' : 'text-gray-900'}`}>
-                                                    {project.name}
-                                                </h3>
-                                                <p className="text-xs text-gray-500">{project.owner}</p>
-                                            </div>
-                                        </div>
-                                        <div className="relative">
-                                            {['admin', 'project_manager'].includes(user?.role || '') && (
-                                                <button
-                                                    onClick={() => setDeleteConfirm(deleteConfirm === project.id ? null : project.id)}
-                                                    className="p-1 hover:bg-gray-100 rounded text-gray-400"
-                                                >
-                                                    <MoreVertical className="w-4 h-4" />
-                                                </button>
-                                            )}
-
-                                            {/* Dropdown Menu */}
-                                            {deleteConfirm === project.id && (
-                                                <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10 w-32">
-                                                    <button
-                                                        onClick={() => { openEditModal(project); setDeleteConfirm(null); }}
-                                                        className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                                    >
-                                                        <Edit2 className="w-3.5 h-3.5" />
-                                                        แก้ไข
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteClick(project)}
-                                                        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                        ลบ
-                                                    </button>
+                                    <div className="p-5 flex flex-col h-full pl-6">
+                                        {/* Header */}
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <Link href={`/projects/${project.id}`} className="block">
+                                                    <h3 className="text-base font-bold text-gray-900 leading-tight truncate group-hover:text-blue-700 transition-colors" title={project.name}>
+                                                        {project.name}
+                                                    </h3>
+                                                </Link>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <Building2 className="w-3 h-3 text-gray-400" />
+                                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide truncate">{project.owner}</span>
                                                 </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Description */}
-                                    {project.description && (
-                                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{project.description}</p>
-                                    )}
-
-                                    {/* Progress */}
-                                    <div className="mb-4">
-                                        <div className="flex items-center justify-between text-sm mb-1.5">
-                                            <span className="text-gray-600">Progress</span>
-                                            <span className={`font-medium ${project.overallProgress === 100 ? 'text-green-600' :
-                                                project.overallProgress >= 50 ? 'text-blue-600' :
-                                                    'text-gray-700'
-                                                }`}>
-                                                {project.overallProgress}%
-                                            </span>
-                                        </div>
-                                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full transition-all ${project.overallProgress === 100 ? 'bg-green-500' :
-                                                    project.overallProgress >= 50 ? 'bg-blue-500' :
-                                                        project.overallProgress > 0 ? 'bg-amber-500' :
-                                                            'bg-gray-300'
-                                                    }`}
-                                                style={{ width: `${project.overallProgress}%` }}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Meta Info */}
-                                    <div className="flex items-center gap-3 text-sm text-gray-600 mb-4">
-                                        <div className="flex items-center gap-1.5">
-                                            <Calendar className="w-3.5 h-3.5" />
-                                            <span>{formatDate(project.startDate)}</span>
-                                        </div>
-                                        <span>→</span>
-                                        <span>{formatDate(project.endDate)}</span>
-                                        <span className="text-gray-400">
-                                            ({Math.max(0, differenceInDays(parseISO(project.endDate), parseISO(project.startDate)) + 1)} วัน)
-                                        </span>
-                                    </div>
-
-                                    {/* Footer */}
-                                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border inline-flex items-center gap-1 ${statusConfig.class}`}>
-                                                {statusConfig.icon}
-                                                {statusConfig.label}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center gap-2">
-                                                <Link
-                                                    href={`/scurve?project=${project.id}`}
-                                                    className="px-2.5 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 flex items-center gap-1.5 shadow-sm transition-all hover:shadow-md"
-                                                    title="S-Curve"
-                                                >
-                                                    <BarChart3 className="w-3.5 h-3.5" />
-                                                    S-Curve
-                                                </Link>
-                                                <Link
-                                                    href={`/gantt?projectId=${project.id}`}
-                                                    className="px-2.5 py-1.5 text-xs font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 flex items-center gap-1.5 shadow-sm transition-all hover:shadow-md"
-                                                    title="Gantt Chart"
-                                                >
-                                                    <GanttChartSquare className="w-3.5 h-3.5" />
-                                                    Gantt
-                                                </Link>
                                             </div>
+
+                                            {/* Menu & Status */}
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${statusConfig.class}`}>
+                                                    {statusConfig.label}
+                                                </span>
+
+                                                <div className="relative">
+                                                    {['admin', 'project_manager'].includes(user?.role || '') && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                setDeleteConfirm(deleteConfirm === project.id ? null : project.id);
+                                                            }}
+                                                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                                        >
+                                                            <MoreVertical className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Dropdown Menu */}
+                                                    {deleteConfirm === project.id && (
+                                                        <div className="absolute right-0 top-6 bg-white border border-gray-200 rounded shadow-lg py-1 z-20 w-32">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    openEditModal(project);
+                                                                    setDeleteConfirm(null);
+                                                                }}
+                                                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                            >
+                                                                <Edit2 className="w-3 h-3" />
+                                                                แก้ไข
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    handleDeleteClick(project);
+                                                                }}
+                                                                className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                                ลบ
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Description (Optional - can be removed for more compactness, keeping for info) */}
+                                        {project.description && (
+                                            <p className="text-xs text-gray-500 line-clamp-2 mb-4 h-8">
+                                                {project.description}
+                                            </p>
+                                        )}
+
+                                        {/* Metrics Row */}
+                                        <div className="grid grid-cols-2 gap-4 mb-4 mt-auto">
+                                            {/* Date Info */}
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-medium uppercase mb-1">Timeline</p>
+                                                <div className="flex items-center gap-1.5 text-xs text-gray-700 font-medium">
+                                                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                                    <span>{duration} Days</span>
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                                                    {formatDate(project.startDate)} - {formatDate(project.endDate)}
+                                                </p>
+                                            </div>
+
+                                            {/* Progress Info */}
+                                            <div className="flex flex-col justify-end">
+                                                <div className="flex justify-between items-end mb-1">
+                                                    <span className="text-[10px] text-gray-400 font-medium uppercase">Progress</span>
+                                                    <span className={`text-xs font-bold ${project.overallProgress >= 100 ? 'text-green-600' : 'text-gray-900'}`}>{project.overallProgress}%</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-1000 ${project.overallProgress >= 100 ? 'bg-green-500' :
+                                                            project.overallProgress >= 50 ? 'bg-blue-600' : 'bg-gray-700'
+                                                            }`}
+                                                        style={{ width: `${project.overallProgress}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Divider */}
+                                        <div className="h-px bg-gray-100 mb-3" />
+
+                                        {/* Action Grid - Clean Business Style */}
+                                        <div className="grid grid-cols-5 gap-2">
+                                            {/* S-Curve */}
+                                            <Link
+                                                href={`/scurve?project=${project.id}`}
+                                                className="flex flex-col items-center justify-center py-2 px-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors"
+                                                title="S-Curve Analysis"
+                                            >
+                                                <BarChart3 className="w-4 h-4 mb-1.5" />
+                                                <span className="text-[10px] font-semibold">S-Curve</span>
+                                            </Link>
+
+                                            {/* Gantt */}
+                                            <Link
+                                                href={`/gantt?projectId=${project.id}`}
+                                                className="flex flex-col items-center justify-center py-2 px-1 rounded bg-teal-50 hover:bg-teal-100 text-teal-700 transition-colors"
+                                                title="Gantt Chart"
+                                            >
+                                                <GanttChartSquare className="w-4 h-4 mb-1.5" />
+                                                <span className="text-[10px] font-semibold">Gantt</span>
+                                            </Link>
+
+                                            {/* Procurement */}
+                                            <Link
+                                                href={`/procurement/${project.id}`}
+                                                className="flex flex-col items-center justify-center py-2 px-1 rounded bg-orange-50 hover:bg-orange-100 text-orange-700 transition-colors"
+                                                title="Procurement Plan"
+                                            >
+                                                <ShoppingBag className="w-4 h-4 mb-1.5" />
+                                                <span className="text-[10px] font-semibold">Procure</span>
+                                            </Link>
+
+                                            {/* 4 Week */}
+                                            <Link
+                                                href={`/gantt-4w/${project.id}`}
+                                                className="flex flex-col items-center justify-center py-2 px-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 transition-colors"
+                                                title="4 Week Lookahead"
+                                            >
+                                                <CalendarDays className="w-4 h-4 mb-1.5" />
+                                                <span className="text-[10px] font-semibold">4-Week</span>
+                                            </Link>
+                                            {/* Tasks (Main Project Page) */}
                                             <Link
                                                 href={`/projects/${project.id}`}
-                                                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-200 rounded-md hover:bg-gray-200 hover:text-gray-900 transition-all flex items-center gap-1"
+                                                className="flex flex-col items-center justify-center py-2 px-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
+                                                title="Project Tasks"
                                             >
-                                                รายละเอียด →
+                                                <ListTodo className="w-4 h-4 mb-1.5" />
+                                                <span className="text-[10px] font-semibold">Tasks</span>
                                             </Link>
                                         </div>
                                     </div>
@@ -563,6 +594,30 @@ export default function ProjectsPage() {
                                                     >
                                                         <GanttChartSquare className="w-3.5 h-3.5" />
                                                         Gantt
+                                                    </Link>
+                                                    <Link
+                                                        href={`/procurement/${project.id}`}
+                                                        className="px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 transition-colors flex items-center gap-1.5"
+                                                        title="Procurement"
+                                                    >
+                                                        <ShoppingBag className="w-3.5 h-3.5" />
+                                                        Procurement
+                                                    </Link>
+                                                    <Link
+                                                        href={`/gantt-4w/${project.id}`}
+                                                        className="px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 transition-colors flex items-center gap-1.5"
+                                                        title="4 Week Lookahead"
+                                                    >
+                                                        <CalendarDays className="w-3.5 h-3.5" />
+                                                        4 Week
+                                                    </Link>
+                                                    <Link
+                                                        href={`/projects/${project.id}`}
+                                                        className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                                                        title="Tasks"
+                                                    >
+                                                        <ListTodo className="w-3.5 h-3.5" />
+                                                        Tasks
                                                     </Link>
                                                 </div>
                                             </td>

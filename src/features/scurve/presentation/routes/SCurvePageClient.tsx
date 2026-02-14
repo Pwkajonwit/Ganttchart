@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import SCurveChart from '@/features/scurve/presentation/components/SCurveChart';
-import { Loader2, FolderKanban, TrendingUp, BarChart3 } from 'lucide-react';
+import { Loader2, FolderKanban, TrendingUp, Layout, ChevronDown, Layers, Calendar, ArrowLeft, Target } from 'lucide-react';
 import Link from 'next/link';
 import { Employee, Project, Task } from '@/types/construction';
 import { getEmployees, getProjects, getTasks } from '@/lib/firestore';
@@ -17,6 +17,8 @@ export default function SCurvePageClient() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+    const viewMenuRef = React.useRef<HTMLDivElement>(null);
 
     const fetchProjects = useCallback(async () => {
         try {
@@ -72,6 +74,16 @@ export default function SCurvePageClient() {
         fetchEmployeesData();
     }, []);
 
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
+                setIsViewMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
     if (loading) {
@@ -111,7 +123,7 @@ export default function SCurvePageClient() {
     return (
         <div className="space-y-4 font-sans">
             {selectedProject && (
-                <div className="gantt-page-header flex items-start justify-between gap-4">
+                <div className="gantt-page-header flex items-start justify-between gap-4 relative z-[100]">
                     <div>
                         <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
                             <TrendingUp className="w-6 h-6 text-emerald-600" />
@@ -121,14 +133,6 @@ export default function SCurvePageClient() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap justify-end">
-                        <Link
-                            href={`/gantt?project=${selectedProjectId}`}
-                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-                        >
-                            <BarChart3 className="w-4 h-4" />
-                            ไปหน้า Gantt
-                        </Link>
-
                         {!projectParam && (
                             <select
                                 value={selectedProjectId}
@@ -141,12 +145,71 @@ export default function SCurvePageClient() {
                             </select>
                         )}
 
-                        <Link
-                            href={`/projects/${selectedProjectId}`}
-                            className="px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-                        >
-                            View Details →
-                        </Link>
+                        {/* Views Dropdown */}
+                        <div className="relative" ref={viewMenuRef}>
+                            <button
+                                onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+                                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                            >
+                                <Layout className="w-4 h-4 text-gray-500" />
+                                Views
+                                <ChevronDown className="w-3 h-3 text-gray-400" />
+                            </button>
+
+                            {isViewMenuOpen && (
+                                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-lg z-[110] py-1">
+                                    <Link
+                                        href={`/projects/${selectedProjectId}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <ArrowLeft className="w-4 h-4 text-gray-500" />
+                                        Back to Details
+                                    </Link>
+                                    <div className="h-px bg-gray-100 my-1" />
+                                    <Link
+                                        href={`/gantt/${selectedProjectId}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <Layers className="w-4 h-4 text-blue-600" />
+                                        Gantt Chart
+                                    </Link>
+                                    <Link
+                                        href={`/cost-code/${selectedProjectId}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <Target className="w-4 h-4 text-purple-600" />
+                                        Cost Code Summary
+                                    </Link>
+                                    <Link
+                                        href={`/gantt-4w/${selectedProjectId}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <Calendar className="w-4 h-4 text-indigo-600" />
+                                        4-Week Lookahead
+                                    </Link>
+                                    <Link
+                                        href={`/procurement/${selectedProjectId}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <Calendar className="w-4 h-4 text-amber-600" />
+                                        Procurement Plan
+                                    </Link>
+                                    <Link
+                                        href={`/scurve/${selectedProjectId}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                                        S-Curve Analysis
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

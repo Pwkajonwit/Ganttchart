@@ -165,11 +165,11 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
                     {visibleColumns.quantity && (
                         <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate"></div>
                     )}
-                    {visibleColumns.dueProcurement && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
-                    {visibleColumns.dueMaterialOnSite && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
-                    {visibleColumns.dateOfUse && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
-                    {visibleColumns.duration && <div className="w-[62px] h-full flex items-center justify-end border-l border-gray-300/70 text-[10px] text-gray-500 pr-2 shrink-0">-</div>}
-                    {visibleColumns.procurementStatus && <div className="w-[96px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
+                    {isProcurementMode && visibleColumns.dueProcurement && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
+                    {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
+                    {isProcurementMode && visibleColumns.dateOfUse && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
+                    {isProcurementMode && visibleColumns.duration && <div className="w-[62px] h-full flex items-center justify-end border-l border-gray-300/70 text-[10px] text-gray-500 pr-2 shrink-0">-</div>}
+                    {isProcurementMode && visibleColumns.procurementStatus && <div className="w-[96px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
                     {visibleColumns.period && (
                         <div className="w-[150px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
                             {categorySummary.dateRange ? (
@@ -202,8 +202,8 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
                                 ${isFourWeekView && viewMode === 'day'
                                     ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
                                     : viewMode === 'week'
-                                    ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                    : 'border-r border-dashed border-gray-300/60'}
+                                        ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                        : 'border-r border-dashed border-gray-300/60'}
                                 ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''}
                                 `}
                                 style={{ width: config.cellWidth }} />

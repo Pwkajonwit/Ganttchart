@@ -50,11 +50,11 @@ export default function TimelineHeader({
                             {visibleColumns.cost && <div className={`w-20 justify-end px-2 ${commonHeaderClass}`}>Budget</div>}
                             {visibleColumns.weight && <div className={`w-16 justify-end px-2 ${commonHeaderClass}`}>Weight</div>}
                             {visibleColumns.quantity && <div className={`w-20 justify-start pl-2 ${commonHeaderClass}`}>Quantity</div>}
-                            {visibleColumns.dueProcurement && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>Due Proc.</div>}
-                            {visibleColumns.dueMaterialOnSite && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>On Site</div>}
-                            {visibleColumns.dateOfUse && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>Use Date</div>}
-                            {visibleColumns.duration && <div className={`w-[62px] justify-end px-2 ${commonHeaderClass}`}>Duration</div>}
-                            {visibleColumns.procurementStatus && <div className={`w-[96px] justify-start pl-2 ${commonHeaderClass}`}>Proc. Status</div>}
+                            {isProcurementMode && visibleColumns.dueProcurement && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>Due Proc.</div>}
+                            {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>On Site</div>}
+                            {isProcurementMode && visibleColumns.dateOfUse && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>Use Date</div>}
+                            {isProcurementMode && visibleColumns.duration && <div className={`w-[62px] justify-end px-2 ${commonHeaderClass}`}>Duration</div>}
+                            {isProcurementMode && visibleColumns.procurementStatus && <div className={`w-[96px] justify-start pl-2 ${commonHeaderClass}`}>Proc. Status</div>}
                             {visibleColumns.planDuration && <div className={`w-[60px] justify-end px-1 ${commonHeaderClass}`}>Plan (d)</div>}
                             {visibleColumns.actualDuration && <div className={`w-[60px] justify-end px-1 ${commonHeaderClass}`}>Actual (d)</div>}
                             {visibleColumns.period && <div className={`w-[150px] justify-start pl-2 ${commonHeaderClass}`}>Period</div>}

@@ -24,19 +24,20 @@ import { useSidebar } from '@/contexts/SidebarContext';
 
 interface NavItem {
     name: string;
+    nameTh: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
 }
 
 const navigation: NavItem[] = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Projects', href: '/projects', icon: FolderKanban },
-    { name: 'Tasks', href: '/tasks', icon: ListTodo },
-    { name: 'Procurement', href: '/procurement', icon: BarChart3 },
-    { name: 'Employees', href: '/employees', icon: Users },
-    { name: 'Reports', href: '/reports', icon: FileSpreadsheet },
-    { name: 'Convert CSV', href: '/convert-csv', icon: CalendarDays },
-    { name: 'Settings', href: '/settings', icon: Settings },
+    { name: 'Dashboard', nameTh: 'ภาพรวม', href: '/', icon: LayoutDashboard },
+    { name: 'Projects', nameTh: 'โครงการ', href: '/projects', icon: FolderKanban },
+    { name: 'Tasks', nameTh: 'จัดการงาน', href: '/tasks', icon: ListTodo },
+    { name: 'Procurement', nameTh: 'แจ้งเตือนจัดซื้อ', href: '/procurement', icon: BarChart3 },
+    { name: 'Employees', nameTh: 'พนักงาน', href: '/employees', icon: Users },
+    { name: 'Reports', nameTh: 'รายงาน', href: '/reports', icon: FileSpreadsheet },
+    { name: 'Convert CSV', nameTh: 'แปลงไฟล์ CSV', href: '/convert-csv', icon: CalendarDays },
+    { name: 'Settings', nameTh: 'ตั้งค่า', href: '/settings', icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -52,7 +53,8 @@ export default function Sidebar() {
                 const isMatch = item.href === '/'
                     ? pathname === '/'
                     : pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return isMatch ? item.href : null;
+                if (isMatch) return item.href;
+                return null;
             })
             .filter((value): value is string => value !== null);
 
@@ -130,7 +132,7 @@ export default function Sidebar() {
                             key={item.name}
                             href={item.href}
                             className={clsx(
-                                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium',
+                                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm',
                                 isActive
                                     ? 'bg-blue-50 text-blue-700'
                                     : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
@@ -138,11 +140,21 @@ export default function Sidebar() {
                             onClick={() => setMobileOpen(false)}
                         >
                             <item.icon className={clsx(
-                                'w-5 h-5',
+                                'w-5 h-5 shrink-0',
                                 isActive ? 'text-blue-600' : 'text-gray-500'
                             )} />
 
-                            {!collapsed && <span>{item.name}</span>}
+                            {!collapsed && (
+                                <div className="flex flex-col">
+                                    <span className="leading-none">{item.name}</span>
+                                    <span className={clsx(
+                                        "text-[10px] mt-0.5",
+                                        isActive ? "text-blue-500" : "text-gray-400"
+                                    )}>
+                                        {item.nameTh}
+                                    </span>
+                                </div>
+                            )}
                         </Link>
                     );
                 })}
@@ -203,4 +215,3 @@ export default function Sidebar() {
         </>
     );
 }
-
