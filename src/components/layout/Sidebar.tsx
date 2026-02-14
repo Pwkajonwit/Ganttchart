@@ -17,7 +17,8 @@ import {
     Building2,
     Users,
     Menu,
-    X
+    X,
+    DollarSign
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -34,6 +35,7 @@ const navigation: NavItem[] = [
     { name: 'Projects', nameTh: 'โครงการ', href: '/projects', icon: FolderKanban },
     { name: 'Tasks', nameTh: 'จัดการงาน', href: '/tasks', icon: ListTodo },
     { name: 'Procurement', nameTh: 'แจ้งเตือนจัดซื้อ', href: '/procurement', icon: BarChart3 },
+    { name: 'Weekly Cost', nameTh: 'ต้นทุนรายสัปดาห์', href: '/weekly-cost', icon: DollarSign },
     { name: 'Employees', nameTh: 'พนักงาน', href: '/employees', icon: Users },
     { name: 'Reports', nameTh: 'รายงาน', href: '/reports', icon: FileSpreadsheet },
     { name: 'Convert CSV', nameTh: 'แปลงไฟล์ CSV', href: '/convert-csv', icon: CalendarDays },

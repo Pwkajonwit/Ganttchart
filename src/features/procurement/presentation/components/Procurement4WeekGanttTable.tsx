@@ -15,7 +15,7 @@ import {
     startOfDay
 } from 'date-fns';
 import { ChevronDown, ChevronRight, FolderKanban, Maximize2, Minimize2 } from 'lucide-react';
-import { updateTask } from '@/lib/firestore';
+import { updateTask, updateProject } from '@/lib/firestore';
 import { Project, Task } from '@/types/construction';
 
 interface Procurement4WeekGanttTableProps {
@@ -23,6 +23,7 @@ interface Procurement4WeekGanttTableProps {
     tasks: Task[];
     windowStart: Date;
     windowEnd: Date;
+    onProjectUpdate?: (project: Project) => void;
 }
 
 type ProjectSection = {
@@ -69,6 +70,17 @@ const MARKER_TOP = TASK_BAR_TOP + Math.floor((TASK_BAR_HEIGHT - MARKER_SIZE) / 2
 const DUE_PROCUREMENT_DAYS = -5;
 const DUE_ONSITE_DAYS = -1;
 const USE_DATE_DAYS = 0;
+
+const GANTT_COLORS = [
+    '#3b82f6', // Blue
+    '#ef4444', // Red
+    '#22c55e', // Green
+    '#eab308', // Yellow
+    '#a855f7', // Purple
+    '#ec4899', // Pink
+    '#f97316', // Orange
+    '#6b7280'  // Gray
+];
 
 const parseTaskDate = (value?: string) => {
     if (!value) return null;
@@ -149,7 +161,8 @@ export default function Procurement4WeekGanttTable({
     projects,
     tasks,
     windowStart,
-    windowEnd
+    windowEnd,
+    onProjectUpdate
 }: Procurement4WeekGanttTableProps) {
     const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
     const [collapsedTaskGroups, setCollapsedTaskGroups] = useState<Set<string>>(new Set());
@@ -157,6 +170,7 @@ export default function Procurement4WeekGanttTable({
     const [savingTaskIds, setSavingTaskIds] = useState<Set<string>>(new Set());
     const [dateOverrides, setDateOverrides] = useState<Record<string, Partial<Pick<Task, TaskDateField>>>>({});
     const [savingDateTaskIds, setSavingDateTaskIds] = useState<Set<string>>(new Set());
+    const [activeColorProjectId, setActiveColorProjectId] = useState<string | null>(null);
     const [isApplyingAllDates, setIsApplyingAllDates] = useState(false);
     const [showAllTasks, setShowAllTasks] = useState(false);
     const [dateEditMode, setDateEditMode] = useState<DateEditMode>('all');
@@ -573,11 +587,10 @@ export default function Procurement4WeekGanttTable({
 
     return (
         <div
-            className={`relative bg-white border border-gray-300 rounded w-full min-w-0 max-w-full ${
-                isExpanded
-                    ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none overflow-auto'
-                    : 'overflow-hidden'
-            }`}
+            className={`relative bg-white border border-gray-300 rounded w-full min-w-0 max-w-full ${isExpanded
+                ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none overflow-auto'
+                : 'overflow-hidden'
+                }`}
         >
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-200 bg-gray-50">
                 <p className="text-xs text-gray-600">
@@ -678,357 +691,403 @@ export default function Procurement4WeekGanttTable({
                     <p className="text-gray-500 text-xs mt-1">Use Show All to display them.</p>
                 </div>
             ) : (
-            <div ref={tableContainerRef} className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden">
-                <div style={{ width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}>
-                    <div className="flex border-b border-slate-300 bg-slate-100">
-                        <div
-                            className="shrink-0 border-r border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-700 tracking-wide"
-                            style={{ width: `${leftColWidth}px` }}
-                        >
-                            Project / Task
-                        </div>
-
-                        <div className="min-w-0 border-r border-slate-300 relative" style={{ width: `${timelineWidth}px` }}>
-                            <div className="flex border-b border-slate-300" style={{ height: `${HEADER_WEEK_ROW_HEIGHT}px` }}>
-                                {weekSegments.map((segment) => (
-                                    <div
-                                        key={segment.label}
-                                        className="text-[11px] font-semibold text-slate-700 border-r border-slate-300 px-2 h-full flex items-center"
-                                        style={{ width: `${segment.span * dayCellWidth}px` }}
-                                    >
-                                        {segment.label}
-                                    </div>
-                                ))}
+                <div ref={tableContainerRef} className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden">
+                    <div style={{ width: `${tableWidth}px`, minWidth: `${tableWidth}px` }}>
+                        <div className="flex border-b border-slate-300 bg-slate-100">
+                            <div
+                                className="shrink-0 border-r border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-700 tracking-wide"
+                                style={{ width: `${leftColWidth}px` }}
+                            >
+                                Project / Task
                             </div>
-                            <div className="flex" style={{ height: `${HEADER_DAY_ROW_HEIGHT}px` }}>
-                                {days.map((day) => (
-                                    <div
-                                        key={day.toISOString()}
-                                        className="text-[10px] text-slate-500 border-r border-slate-200 h-full flex items-center justify-center"
-                                        style={{ width: `${dayCellWidth}px` }}
-                                    >
-                                        {format(day, 'dd')}
-                                    </div>
-                                ))}
-                            </div>
-                            {todayLineLeft !== null && (
-                                <div
-                                    className="absolute z-30 pointer-events-none -translate-x-1/2"
-                                    style={{ left: `${todayLineLeft}px`, top: `${HEADER_WEEK_ROW_HEIGHT}px`, bottom: 0 }}
-                                >
-                                    <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
-                                </div>
-                            )}
-                        </div>
 
-                        <div className="shrink-0 grid bg-slate-100" style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px` }}>
-                            <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">Due Proc.</div>
-                            <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">On Site</div>
-                            <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">Use Date</div>
-                            <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">Proc. Status</div>
-                            <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 text-left">Period</div>
-                        </div>
-                    </div>
-
-                    {treeData.sections.map(({ project, rows, leafTasks, visibleLeafCount }) => {
-                        const isCollapsed = collapsedProjects.has(project.id);
-                        const projectStarts = leafTasks.map((task) => parseTaskDate(task.planStartDate)).filter(Boolean) as Date[];
-                        const projectEnds = leafTasks.map((task) => parseTaskDate(task.planEndDate)).filter(Boolean) as Date[];
-                        const periodText = projectStarts.length > 0 && projectEnds.length > 0
-                            ? buildPeriod(
-                                new Date(Math.min(...projectStarts.map((d) => d.getTime()))),
-                                new Date(Math.max(...projectEnds.map((d) => d.getTime())))
-                            )
-                            : '-';
-
-                        return (
-                            <React.Fragment key={project.id}>
-                                <div className="flex border-b border-gray-200 bg-slate-50">
-                                    <div
-                                        className="shrink-0 border-r border-gray-300 px-4 h-full flex items-center"
-                                        style={{ width: `${leftColWidth}px`, height: `${PROJECT_ROW_HEIGHT}px` }}
-                                    >
-                                        <button
-                                            type="button"
-                                            className="inline-flex items-center gap-2 text-xs font-semibold text-gray-900 hover:text-blue-700"
-                                            onClick={() => toggleProject(project.id)}
-                                            draggable={false}
+                            <div className="min-w-0 border-r border-slate-300 relative" style={{ width: `${timelineWidth}px` }}>
+                                <div className="flex border-b border-slate-300" style={{ height: `${HEADER_WEEK_ROW_HEIGHT}px` }}>
+                                    {weekSegments.map((segment) => (
+                                        <div
+                                            key={segment.label}
+                                            className="text-[11px] font-semibold text-slate-700 border-r border-slate-300 px-2 h-full flex items-center"
+                                            style={{ width: `${segment.span * dayCellWidth}px` }}
                                         >
-                                            <span className="text-gray-300 text-xs">::</span>
-                                            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                            <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                                            <span>{project.name}</span>
-                                            <span className="text-[9px] text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded">{visibleLeafCount}</span>
-                                        </button>
-                                    </div>
-
-                                    <div className="relative border-r border-gray-200" style={{ width: `${timelineWidth}px`, height: `${PROJECT_ROW_HEIGHT}px` }}>
-                                        <div className="absolute inset-0 flex">
-                                            {days.map((day) => (
-                                                <div
-                                                    key={`${project.id}-${day.toISOString()}`}
-                                                    className="border-r border-gray-200"
-                                                    style={{ width: `${dayCellWidth}px` }}
-                                                />
-                                            ))}
+                                            {segment.label}
                                         </div>
-                                        {todayLineLeft !== null && (
-                                            <div
-                                                className="absolute inset-y-0 z-30 pointer-events-none -translate-x-1/2"
-                                                style={{ left: `${todayLineLeft}px` }}
-                                            >
-                                                <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div
-                                        className="shrink-0 grid text-xs bg-slate-50"
-                                        style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px`, height: `${PROJECT_ROW_HEIGHT}px` }}
-                                    >
-                                        <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
-                                        <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
-                                        <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
-                                        <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
-                                        <div className="px-2 text-gray-700 font-semibold flex items-center">{periodText}</div>
-                                    </div>
+                                    ))}
                                 </div>
-
-                                {!isCollapsed && rows.map((row) => {
-                                    const isTaskGroupCollapsed = collapsedTaskGroups.has(row.id);
-
-                                    if (row.isGroup) {
-                                        return (
-                                            <div key={row.id} className="flex border-b border-gray-100 bg-white" style={{ height: `${GROUP_ROW_HEIGHT}px` }}>
-                                                <div
-                                                    className="shrink-0 border-r border-gray-200 px-3 text-xs h-full flex items-center"
-                                                    style={{ width: `${leftColWidth}px` }}
-                                                >
-                                                    <div
-                                                        className="flex items-center min-w-0"
-                                                        style={{ paddingLeft: `${8 + row.level * 18}px` }}
-                                                    >
-                                                        <span className="text-gray-300 text-[10px] shrink-0 mr-1">::</span>
-                                                        {row.hasChildren ? (
-                                                            <button
-                                                                type="button"
-                                                                className="w-4 h-4 inline-flex items-center justify-center text-gray-500 hover:text-blue-600 shrink-0 mr-1"
-                                                                onClick={() => toggleTaskGroup(row.id)}
-                                                                draggable={false}
-                                                            >
-                                                                {isTaskGroupCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                                            </button>
-                                                        ) : (
-                                                            <span className="w-4 shrink-0 mr-1" />
-                                                        )}
-                                                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0 mr-2" />
-                                                        <span
-                                                            className={`truncate text-[11px] ${
-                                                                row.level === 2 ? 'font-semibold italic text-blue-700' : 'font-semibold text-blue-700'
-                                                            }`}
-                                                        >
-                                                            {row.label}
-                                                        </span>
-                                                        {row.descendantLeafCount > 0 && (
-                                                            <span className="ml-2 text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                                                                {row.descendantLeafCount}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="relative border-r border-gray-100 bg-gray-50/50" style={{ width: `${timelineWidth}px`, height: `${GROUP_ROW_HEIGHT}px` }}>
-                                                    <div className="absolute inset-0 flex">
-                                                        {days.map((day) => (
-                                                            <div
-                                                                key={`${row.id}-${day.toISOString()}`}
-                                                                className="border-r border-gray-100"
-                                                                style={{ width: `${dayCellWidth}px` }}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                    {todayLineLeft !== null && (
-                                                        <div
-                                                            className="absolute inset-y-0 z-30 pointer-events-none -translate-x-1/2"
-                                                            style={{ left: `${todayLineLeft}px` }}
-                                                        >
-                                                            <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div
-                                                    className="shrink-0 grid text-xs bg-white"
-                                                    style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px`, height: `${GROUP_ROW_HEIGHT}px` }}
-                                                >
-                                                    <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
-                                                    <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
-                                                    <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
-                                                    <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
-                                                    <div className="px-2 text-gray-700 flex items-center">{row.period}</div>
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-
-                                    const task = row.task;
-                                    if (!task) return null;
-
-                                    const bar = getBarLayout(task, windowStart, windowEnd, dayCellWidth);
-                                    if (!bar) return null;
-
-                                    const dateInfo = getTaskDateInfo(task);
-                                    const milestoneDates = {
-                                        dueProc: dateInfo.dueProcDate,
-                                        onSite: dateInfo.onSiteDate
-                                    };
-                                    const dueProcLeft = getMarkerLeft(milestoneDates.dueProc, windowStart, windowEnd, dayCellWidth);
-                                    const onSiteLeft = getMarkerLeft(milestoneDates.onSite, windowStart, windowEnd, dayCellWidth);
-                                    const status = getTaskStatus(task);
-                                    const isSaving = savingTaskIds.has(task.id);
-                                    const isSavingDate = savingDateTaskIds.has(task.id);
-
-                                    return (
-                                        <div key={task.id} className="flex border-b border-gray-100 hover:bg-gray-50/50" style={{ height: `${TASK_ROW_HEIGHT}px` }}>
-                                            <div
-                                                className="shrink-0 border-r border-gray-200 px-3 text-xs h-full flex items-center"
-                                                style={{ width: `${leftColWidth}px` }}
-                                            >
-                                                <div
-                                                    className="flex items-center min-w-0"
-                                                    style={{ paddingLeft: `${8 + row.level * 18}px` }}
-                                                >
-                                                    <span className="text-gray-300 text-[10px] shrink-0 mr-1">::</span>
-                                                    <span className="w-4 shrink-0 mr-1" />
-                                                    <span className="h-2.5 w-2.5 rounded-full bg-slate-300 shrink-0 mr-2" />
-                                                    <span className="text-[11px] font-medium text-gray-800 truncate">{task.name}</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="relative border-r border-gray-100" style={{ width: `${timelineWidth}px`, height: `${TASK_ROW_HEIGHT}px` }}>
-                                                <div className="absolute inset-0 flex">
-                                                    {days.map((day) => (
-                                                        <div
-                                                            key={`${task.id}-${day.toISOString()}`}
-                                                            className="border-r border-gray-100"
-                                                            style={{ width: `${dayCellWidth}px` }}
-                                                        />
-                                                    ))}
-                                                </div>
-                                                {todayLineLeft !== null && (
-                                                    <div
-                                                        className="absolute inset-y-0 z-30 pointer-events-none -translate-x-1/2"
-                                                        style={{ left: `${todayLineLeft}px` }}
-                                                    >
-                                                        <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
-                                                    </div>
-                                                )}
-                                                <div
-                                                    className="absolute rounded bg-blue-500 border border-blue-600"
-                                                    style={{
-                                                        left: `${bar.left}px`,
-                                                        width: `${bar.width}px`,
-                                                        top: `${TASK_BAR_TOP}px`,
-                                                        height: `${TASK_BAR_HEIGHT}px`
-                                                    }}
-                                                    title={`${task.name} (${task.planStartDate} - ${task.planEndDate})`}
-                                                >
-                                                    <div
-                                                        className="h-full rounded bg-emerald-400/90"
-                                                        style={{ width: `${Math.max(0, Math.min(100, task.progress || 0))}%` }}
-                                                    />
-                                                </div>
-
-                                                {dueProcLeft !== null && (
-                                                    <div
-                                                        className="absolute -translate-x-1/2"
-                                                        style={{ left: `${dueProcLeft}px`, top: `${MARKER_TOP}px` }}
-                                                        title={`Due Proc.: ${format(milestoneDates.dueProc as Date, 'dd/MM/yyyy')}`}
-                                                    >
-                                                        <div
-                                                            className="rounded-full bg-red-500 border border-white shadow-sm"
-                                                            style={{ width: `${MARKER_SIZE}px`, height: `${MARKER_SIZE}px` }}
-                                                        />
-                                                    </div>
-                                                )}
-
-                                                {onSiteLeft !== null && (
-                                                    <div
-                                                        className="absolute -translate-x-1/2"
-                                                        style={{ left: `${onSiteLeft}px`, top: `${MARKER_TOP}px` }}
-                                                        title={`On Site: ${format(milestoneDates.onSite as Date, 'dd/MM/yyyy')}`}
-                                                    >
-                                                        <div
-                                                            className="rounded-full bg-amber-500 border border-white shadow-sm"
-                                                            style={{ width: `${MARKER_SIZE}px`, height: `${MARKER_SIZE}px` }}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div
-                                                className="shrink-0 grid text-xs"
-                                                style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px`, height: `${TASK_ROW_HEIGHT}px` }}
-                                            >
-                                                <div className="px-2 border-r border-gray-100 text-gray-700 flex items-center">
-                                                    {dateEditMode === 'item' ? (
-                                                        <input
-                                                            type="date"
-                                                            value={toInputDate(dateInfo.dueProcDate)}
-                                                            onChange={(event) => handleTaskDateChange(task, 'dueProcurementDate', event.target.value)}
-                                                            disabled={isSavingDate || isApplyingAllDates}
-                                                            className="w-full h-6 text-[10px] border border-gray-200 rounded px-1 bg-white disabled:opacity-60"
-                                                        />
-                                                    ) : dateInfo.dueProc}
-                                                </div>
-                                                <div className="px-2 border-r border-gray-100 text-gray-700 flex items-center">
-                                                    {dateEditMode === 'item' ? (
-                                                        <input
-                                                            type="date"
-                                                            value={toInputDate(dateInfo.onSiteDate)}
-                                                            onChange={(event) => handleTaskDateChange(task, 'dueMaterialOnSiteDate', event.target.value)}
-                                                            disabled={isSavingDate || isApplyingAllDates}
-                                                            className="w-full h-6 text-[10px] border border-gray-200 rounded px-1 bg-white disabled:opacity-60"
-                                                        />
-                                                    ) : dateInfo.onSite}
-                                                </div>
-                                                <div className="px-2 border-r border-gray-100 text-gray-700 flex items-center">
-                                                    {dateEditMode === 'item' ? (
-                                                        <input
-                                                            type="date"
-                                                            value={toInputDate(dateInfo.useDateDate)}
-                                                            onChange={(event) => handleTaskDateChange(task, 'dateOfUse', event.target.value)}
-                                                            disabled={isSavingDate || isApplyingAllDates}
-                                                            className="w-full h-6 text-[10px] border border-gray-200 rounded px-1 bg-white disabled:opacity-60"
-                                                        />
-                                                    ) : dateInfo.useDate}
-                                                </div>
-                                                <div className="px-2 border-r border-gray-100 flex items-center">
-                                                    <select
-                                                        value={status}
-                                                        onChange={(event) => handleStatusChange(task, event.target.value as ProcurementStatusKey)}
-                                                        disabled={isSaving}
-                                                        className={`w-full text-[11px] rounded border px-1 py-1 ${getStatusClass(status)} disabled:opacity-60`}
-                                                    >
-                                                        <option value="to-order">To Order</option>
-                                                        <option value="ordered">Ordered</option>
-                                                        <option value="delivered">Delivered</option>
-                                                        <option value="ready">Ready</option>
-                                                        <option value="in-stock">In Stock</option>
-                                                    </select>
-                                                </div>
-                                                <div className="px-2 text-gray-700 flex items-center">{dateInfo.period}</div>
-                                            </div>
+                                <div className="flex" style={{ height: `${HEADER_DAY_ROW_HEIGHT}px` }}>
+                                    {days.map((day) => (
+                                        <div
+                                            key={day.toISOString()}
+                                            className="text-[10px] text-slate-500 border-r border-slate-200 h-full flex items-center justify-center"
+                                            style={{ width: `${dayCellWidth}px` }}
+                                        >
+                                            {format(day, 'dd')}
                                         </div>
-                                    );
-                                })}
-                            </React.Fragment>
-                        );
-                    })}
-                </div>
-            </div>
+                                    ))}
+                                </div>
+                                {todayLineLeft !== null && (
+                                    <div
+                                        className="absolute z-30 pointer-events-none -translate-x-1/2"
+                                        style={{ left: `${todayLineLeft}px`, top: `${HEADER_WEEK_ROW_HEIGHT}px`, bottom: 0 }}
+                                    >
+                                        <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="shrink-0 grid bg-slate-100" style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px` }}>
+                                <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">Due Proc.</div>
+                                <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">On Site</div>
+                                <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">Use Date</div>
+                                <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 border-r border-slate-300 text-center">Proc. Status</div>
+                                <div className="px-2 py-2 text-[11px] font-semibold text-slate-700 text-left">Period</div>
+                            </div>
+                        </div>
+                        {treeData.sections.map(({ project, rows, leafTasks, visibleLeafCount }) => {
+                            const isCollapsed = collapsedProjects.has(project.id);
+                            const projectStarts = leafTasks.map((task) => parseTaskDate(task.planStartDate)).filter(Boolean) as Date[];
+                            const projectEnds = leafTasks.map((task) => parseTaskDate(task.planEndDate)).filter(Boolean) as Date[];
+                            const periodText = projectStarts.length > 0 && projectEnds.length > 0
+                                ? buildPeriod(
+                                    new Date(Math.min(...projectStarts.map((d) => d.getTime()))),
+                                    new Date(Math.max(...projectEnds.map((d) => d.getTime())))
+                                )
+                                : '-';
+
+                            const handleProjectColorChange = async (newColor: string) => {
+                                if (onProjectUpdate) {
+                                    onProjectUpdate({ ...project, color: newColor });
+                                }
+                                setActiveColorProjectId(null);
+                                try {
+                                    await updateProject(project.id, { color: newColor });
+                                } catch (error) {
+                                    console.error('Failed to update project color', error);
+                                }
+                            };
+
+                            return (
+                                <React.Fragment key={project.id}>
+                                    <div className="flex border-b border-gray-200 bg-slate-50 relative">
+                                        <div
+                                            className="shrink-0 border-r border-gray-300 px-4 h-full flex items-center"
+                                            style={{ width: `${leftColWidth}px`, height: `${PROJECT_ROW_HEIGHT}px` }}
+                                        >
+                                            <button
+                                                type="button"
+                                                className="inline-flex items-center gap-2 text-xs font-semibold text-gray-900 hover:text-blue-700"
+                                                onClick={() => toggleProject(project.id)}
+                                                draggable={false}
+                                            >
+                                                <span className="text-gray-300 text-xs">::</span>
+                                                {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+
+                                                <div
+                                                    className="relative h-3 w-3 rounded-full overflow-hidden shadow-sm shrink-0 hover:scale-110 transition-transform cursor-pointer border border-gray-200"
+                                                    style={{ backgroundColor: project.color || '#3b82f6' }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveColorProjectId(activeColorProjectId === project.id ? null : project.id);
+                                                    }}
+                                                />
+                                                {activeColorProjectId === project.id && (
+                                                    <>
+                                                        <div
+                                                            className="fixed inset-0 z-[90]"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveColorProjectId(null);
+                                                            }}
+                                                        />
+                                                        <div
+                                                            className="absolute z-[100] top-8 left-12 bg-white rounded-lg shadow-xl border border-gray-200 p-2 w-32 grid grid-cols-4 gap-1"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            {GANTT_COLORS.map(color => (
+                                                                <div
+                                                                    key={color}
+                                                                    className="w-6 h-6 rounded-full cursor-pointer hover:scale-110 transition-transform border border-gray-100"
+                                                                    style={{ backgroundColor: color }}
+                                                                    onClick={() => handleProjectColorChange(color)}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                <span>{project.name}</span>
+                                                <span className="text-[9px] text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded">{visibleLeafCount}</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="relative border-r border-gray-200" style={{ width: `${timelineWidth}px`, height: `${PROJECT_ROW_HEIGHT}px` }}>
+                                            <div className="absolute inset-0 flex">
+                                                {days.map((day) => (
+                                                    <div
+                                                        key={`${project.id}-${day.toISOString()}`}
+                                                        className="border-r border-gray-200"
+                                                        style={{ width: `${dayCellWidth}px` }}
+                                                    />
+                                                ))}
+                                            </div>
+                                            {todayLineLeft !== null && (
+                                                <div
+                                                    className="absolute inset-y-0 z-30 pointer-events-none -translate-x-1/2"
+                                                    style={{ left: `${todayLineLeft}px` }}
+                                                >
+                                                    <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div
+                                            className="shrink-0 grid text-xs bg-slate-50"
+                                            style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px`, height: `${PROJECT_ROW_HEIGHT}px` }}
+                                        >
+                                            <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
+                                            <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
+                                            <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
+                                            <div className="px-2 border-r border-gray-200 text-gray-500 flex items-center">-</div>
+                                            <div className="px-2 text-gray-700 font-semibold flex items-center">{periodText}</div>
+                                        </div>
+                                    </div>
+
+                                    {
+                                        !isCollapsed && rows.map((row) => {
+                                            const isTaskGroupCollapsed = collapsedTaskGroups.has(row.id);
+
+                                            if (row.isGroup) {
+                                                return (
+                                                    <div key={row.id} className="flex border-b border-gray-100 bg-white" style={{ height: `${GROUP_ROW_HEIGHT}px` }}>
+                                                        <div
+                                                            className="shrink-0 border-r border-gray-200 px-3 text-xs h-full flex items-center"
+                                                            style={{ width: `${leftColWidth}px` }}
+                                                        >
+                                                            <div
+                                                                className="flex items-center min-w-0"
+                                                                style={{ paddingLeft: `${8 + row.level * 18}px` }}
+                                                            >
+                                                                <span className="text-gray-300 text-[10px] shrink-0 mr-1">::</span>
+                                                                {row.hasChildren ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="w-4 h-4 inline-flex items-center justify-center text-gray-500 hover:text-blue-600 shrink-0 mr-1"
+                                                                        onClick={() => toggleTaskGroup(row.id)}
+                                                                        draggable={false}
+                                                                    >
+                                                                        {isTaskGroupCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="w-4 shrink-0 mr-1" />
+                                                                )}
+                                                                <span
+                                                                    className={`truncate text-[11px] ${row.level === 2 ? 'font-semibold italic' : 'font-semibold'}`}
+                                                                    style={{ color: project.color || '#1d4ed8' }}
+                                                                >
+                                                                    {row.label}
+                                                                </span>
+                                                                {row.descendantLeafCount > 0 && (
+                                                                    <span className="ml-2 text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                                        {row.descendantLeafCount}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="relative border-r border-gray-100 bg-gray-50/50" style={{ width: `${timelineWidth}px`, height: `${GROUP_ROW_HEIGHT}px` }}>
+                                                            <div className="absolute inset-0 flex">
+                                                                {days.map((day) => (
+                                                                    <div
+                                                                        key={`${row.id}-${day.toISOString()}`}
+                                                                        className="border-r border-gray-100"
+                                                                        style={{ width: `${dayCellWidth}px` }}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                            {todayLineLeft !== null && (
+                                                                <div
+                                                                    className="absolute inset-y-0 z-30 pointer-events-none -translate-x-1/2"
+                                                                    style={{ left: `${todayLineLeft}px` }}
+                                                                >
+                                                                    <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div
+                                                            className="shrink-0 grid text-xs bg-white"
+                                                            style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px`, height: `${GROUP_ROW_HEIGHT}px` }}
+                                                        >
+                                                            <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
+                                                            <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
+                                                            <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
+                                                            <div className="px-2 border-r border-gray-100 text-gray-500 flex items-center">-</div>
+                                                            <div className="px-2 text-gray-700 flex items-center">{row.period}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            const task = row.task;
+                                            if (!task) return null;
+
+                                            const bar = getBarLayout(task, windowStart, windowEnd, dayCellWidth);
+                                            if (!bar) return null;
+
+                                            const dateInfo = getTaskDateInfo(task);
+                                            const milestoneDates = {
+                                                dueProc: dateInfo.dueProcDate,
+                                                onSite: dateInfo.onSiteDate
+                                            };
+                                            const dueProcLeft = getMarkerLeft(milestoneDates.dueProc, windowStart, windowEnd, dayCellWidth);
+                                            const onSiteLeft = getMarkerLeft(milestoneDates.onSite, windowStart, windowEnd, dayCellWidth);
+                                            const status = getTaskStatus(task);
+                                            const isSaving = savingTaskIds.has(task.id);
+                                            const isSavingDate = savingDateTaskIds.has(task.id);
+
+                                            return (
+                                                <div key={task.id} className="flex border-b border-gray-100 hover:bg-gray-50/50" style={{ height: `${TASK_ROW_HEIGHT}px` }}>
+                                                    <div
+                                                        className="shrink-0 border-r border-gray-200 px-3 text-xs h-full flex items-center"
+                                                        style={{ width: `${leftColWidth}px` }}
+                                                    >
+                                                        <div
+                                                            className="flex items-center min-w-0"
+                                                            style={{ paddingLeft: `${8 + row.level * 18}px` }}
+                                                        >
+                                                            <span className="text-gray-300 text-[10px] shrink-0 mr-1">::</span>
+                                                            <span className="w-4 shrink-0 mr-1" />
+                                                            <span className="h-2.5 w-2.5 rounded-full bg-slate-300 shrink-0 mr-2" />
+                                                            <span className="text-[11px] font-medium text-gray-800 truncate">{task.name}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="relative border-r border-gray-100" style={{ width: `${timelineWidth}px`, height: `${TASK_ROW_HEIGHT}px` }}>
+                                                        <div className="absolute inset-0 flex">
+                                                            {days.map((day) => (
+                                                                <div
+                                                                    key={`${task.id}-${day.toISOString()}`}
+                                                                    className="border-r border-gray-100"
+                                                                    style={{ width: `${dayCellWidth}px` }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                        {todayLineLeft !== null && (
+                                                            <div
+                                                                className="absolute inset-y-0 z-30 pointer-events-none -translate-x-1/2"
+                                                                style={{ left: `${todayLineLeft}px` }}
+                                                            >
+                                                                <div className="h-full w-[2px] bg-rose-600 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]" />
+                                                            </div>
+                                                        )}
+                                                        <div
+                                                            className="absolute rounded border"
+                                                            style={{
+                                                                left: `${bar.left}px`,
+                                                                width: `${bar.width}px`,
+                                                                top: `${TASK_BAR_TOP}px`,
+                                                                height: `${TASK_BAR_HEIGHT}px`,
+                                                                backgroundColor: project.color || '#3b82f6',
+                                                                borderColor: project.color || '#2563eb'
+                                                            }}
+                                                            title={`${task.name} (${task.planStartDate} - ${task.planEndDate})`}
+                                                        >
+                                                            <div
+                                                                className="h-full rounded bg-white/30"
+                                                                style={{ width: `${Math.max(0, Math.min(100, task.progress || 0))}%` }}
+                                                            />
+                                                        </div>
+
+                                                        {dueProcLeft !== null && (
+                                                            <div
+                                                                className="absolute -translate-x-1/2"
+                                                                style={{ left: `${dueProcLeft}px`, top: `${MARKER_TOP}px` }}
+                                                                title={`Due Proc.: ${format(milestoneDates.dueProc as Date, 'dd/MM/yyyy')}`}
+                                                            >
+                                                                <div
+                                                                    className="rounded-full bg-red-500 border border-white shadow-sm"
+                                                                    style={{ width: `${MARKER_SIZE}px`, height: `${MARKER_SIZE}px` }}
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {onSiteLeft !== null && (
+                                                            <div
+                                                                className="absolute -translate-x-1/2"
+                                                                style={{ left: `${onSiteLeft}px`, top: `${MARKER_TOP}px` }}
+                                                                title={`On Site: ${format(milestoneDates.onSite as Date, 'dd/MM/yyyy')}`}
+                                                            >
+                                                                <div
+                                                                    className="rounded-full bg-amber-500 border border-white shadow-sm"
+                                                                    style={{ width: `${MARKER_SIZE}px`, height: `${MARKER_SIZE}px` }}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div
+                                                        className="shrink-0 grid text-xs"
+                                                        style={{ ...rightColumnGridStyle, width: `${rightPanelWidth}px`, height: `${TASK_ROW_HEIGHT}px` }}
+                                                    >
+                                                        <div className="px-2 border-r border-gray-100 text-gray-700 flex items-center">
+                                                            {dateEditMode === 'item' ? (
+                                                                <input
+                                                                    type="date"
+                                                                    value={toInputDate(dateInfo.dueProcDate)}
+                                                                    onChange={(event) => handleTaskDateChange(task, 'dueProcurementDate', event.target.value)}
+                                                                    disabled={isSavingDate || isApplyingAllDates}
+                                                                    className="w-full h-6 text-[10px] border border-gray-200 rounded px-1 bg-white disabled:opacity-60"
+                                                                />
+                                                            ) : dateInfo.dueProc}
+                                                        </div>
+                                                        <div className="px-2 border-r border-gray-100 text-gray-700 flex items-center">
+                                                            {dateEditMode === 'item' ? (
+                                                                <input
+                                                                    type="date"
+                                                                    value={toInputDate(dateInfo.onSiteDate)}
+                                                                    onChange={(event) => handleTaskDateChange(task, 'dueMaterialOnSiteDate', event.target.value)}
+                                                                    disabled={isSavingDate || isApplyingAllDates}
+                                                                    className="w-full h-6 text-[10px] border border-gray-200 rounded px-1 bg-white disabled:opacity-60"
+                                                                />
+                                                            ) : dateInfo.onSite}
+                                                        </div>
+                                                        <div className="px-2 border-r border-gray-100 text-gray-700 flex items-center">
+                                                            {dateEditMode === 'item' ? (
+                                                                <input
+                                                                    type="date"
+                                                                    value={toInputDate(dateInfo.useDateDate)}
+                                                                    onChange={(event) => handleTaskDateChange(task, 'dateOfUse', event.target.value)}
+                                                                    disabled={isSavingDate || isApplyingAllDates}
+                                                                    className="w-full h-6 text-[10px] border border-gray-200 rounded px-1 bg-white disabled:opacity-60"
+                                                                />
+                                                            ) : dateInfo.useDate}
+                                                        </div>
+                                                        <div className="px-2 border-r border-gray-100 flex items-center">
+                                                            <select
+                                                                value={status}
+                                                                onChange={(event) => handleStatusChange(task, event.target.value as ProcurementStatusKey)}
+                                                                disabled={isSaving}
+                                                                className={`w-full text-[11px] rounded border px-1 py-1 ${getStatusClass(status)} disabled:opacity-60`}
+                                                            >
+                                                                <option value="to-order">To Order</option>
+                                                                <option value="ordered">Ordered</option>
+                                                                <option value="delivered">Delivered</option>
+                                                                <option value="ready">Ready</option>
+                                                                <option value="in-stock">In Stock</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="px-2 text-gray-700 flex items-center">{dateInfo.period}</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    }
+                                </React.Fragment >
+                            );
+                        })}
+                    </div >
+                </div >
             )}
-        </div>
+        </div >
     );
 }
 

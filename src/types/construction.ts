@@ -14,6 +14,7 @@ export interface Project {
     updatedAt: string;
     categoryOrder?: string[];
     subcategoryOrder?: Record<string, string[]>; // { "categoryName": ["sub1", "sub2", ...] }
+    color?: string;
 }
 
 export interface Task {
@@ -146,4 +147,14 @@ export interface Employee {
     active?: boolean;
     createdAt?: string;
     updatedAt?: string;
+}
+
+export interface Expense {
+    id: string;
+    projectId: string;
+    amount: number;
+    description: string;
+    date: string; // ISO date string YYYY-MM-DD
+    type?: 'material' | 'labor' | 'subcontract' | 'overhead' | 'other';
+    createdAt?: string;
 }

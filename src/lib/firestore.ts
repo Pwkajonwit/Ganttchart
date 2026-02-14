@@ -15,7 +15,7 @@ import {
     setDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Project, Task, WeeklyLog, Member, Employee } from '@/types/construction';
+import { Project, Task, WeeklyLog, Member, Employee, Expense } from '@/types/construction';
 import { differenceInDays, parseISO } from 'date-fns';
 
 // Helper to remove undefined values for Firestore
@@ -681,4 +681,38 @@ export async function deleteCsvTemplate(userId: string, name: string): Promise<v
     if (!cleanedName) return;
     const templateRef = doc(db, 'members', userId, 'csvTemplates', encodeTemplateDocId(cleanedName));
     await deleteDoc(templateRef);
+}
+
+// ==================== EXPENSES ====================
+
+export async function getExpenses(projectId?: string): Promise<Expense[]> {
+    const expensesRef = collection(db, 'expenses');
+    let q;
+
+    if (projectId) {
+        q = query(expensesRef, where('projectId', '==', projectId), orderBy('date', 'desc'));
+    } else {
+        q = query(expensesRef, orderBy('date', 'desc'));
+    }
+
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+    })) as Expense[];
+}
+
+export async function createExpense(expense: Omit<Expense, 'id' | 'createdAt'>): Promise<string> {
+    const expensesRef = collection(db, 'expenses');
+    const docRef = await addDoc(expensesRef, {
+        ...removeUndefined(expense),
+        createdAt: serverTimestamp()
+    });
+    return docRef.id;
+}
+
+export async function deleteExpense(expenseId: string): Promise<void> {
+    const docRef = doc(db, 'expenses', expenseId);
+    await deleteDoc(docRef);
 }
