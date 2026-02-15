@@ -25,7 +25,7 @@ import {
     CheckCircle2,
     LogOut
 } from 'lucide-react';
-import { getProjects, getAllTasks, seedSampleData, addProject, addTask, clearAllData, getMembers, createMember, updateMember, deleteMember } from '@/lib/firestore';
+import { getProjects, getAllTasks, seedSampleData, seedFullDemoProject, addProject, addTask, clearAllData, getMembers, createMember, updateMember, deleteMember, getUserSettings, saveUserSettings } from '@/lib/firestore';
 import { Task, Project, Member } from '@/types/construction';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -138,6 +138,7 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ projects: 0, tasks: 0 });
     const [seeding, setSeeding] = useState(false);
+    const [seedingFullDemo, setSeedingFullDemo] = useState(false);
     const [importing, setImporting] = useState(false);
     const [clearing, setClearing] = useState(false);
 
@@ -176,7 +177,7 @@ export default function SettingsPage() {
         }
     }, []);
 
-    const fetchMembers = useCallback(async () => {
+    const fetchMembers = useCallback(async (matchEmail?: string) => {
         try {
             const membersData = await getMembers();
             setMembers(membersData);
@@ -187,7 +188,10 @@ export default function SettingsPage() {
 
             // 2. If no link yet, try matching email
             if (!match) {
-                match = membersData.find(m => m.email === settings.profile.email);
+                const normalizedMatchEmail = (matchEmail || '').trim().toLowerCase();
+                if (normalizedMatchEmail) {
+                    match = membersData.find(m => (m.email || '').toLowerCase() === normalizedMatchEmail);
+                }
             }
 
             // 3. Fallback: Default to first Admin or first member if we have data (for demo purposes if no match found)
@@ -213,24 +217,73 @@ export default function SettingsPage() {
         } catch (error) {
             console.error('Error fetching members:', error);
         }
-    }, [currentMemberId, settings.profile.email]);
+    }, [currentMemberId]);
 
-    // Load settings from localStorage and fetch members
+    // Load local settings and base data
     useEffect(() => {
-        const savedSettings = localStorage.getItem('srt-hst-settings');
-        if (savedSettings) {
+        let cancelled = false;
+
+        const initialize = async () => {
+            setLoading(true);
+            let nextSettings = defaultSettings;
+
+            const savedSettings = localStorage.getItem('srt-hst-settings');
             try {
-                const parsed = JSON.parse(savedSettings) as Partial<UserSettings>;
-                setSettings(mergeSettingsWithDefault(parsed));
+                if (savedSettings) {
+                    const parsed = JSON.parse(savedSettings) as Partial<UserSettings>;
+                    nextSettings = mergeSettingsWithDefault(parsed);
+                }
             } catch (error) {
                 console.error('Failed to parse settings:', error);
-                setSettings(defaultSettings);
+                nextSettings = defaultSettings;
             }
-        }
-        fetchStats();
-        fetchMembers();
-        setLoading(false);
+
+            if (!cancelled) {
+                setSettings(nextSettings);
+            }
+
+            await Promise.all([
+                fetchStats(),
+                fetchMembers(nextSettings.profile.email)
+            ]);
+
+            if (!cancelled) {
+                setLoading(false);
+            }
+        };
+
+        initialize();
+
+        return () => {
+            cancelled = true;
+        };
     }, [fetchStats, fetchMembers]);
+
+    // Sync cloud settings when user session is ready
+    useEffect(() => {
+        let cancelled = false;
+
+        const syncCloudSettings = async () => {
+            if (!user?.id) return;
+
+            try {
+                const cloudSettings = await getUserSettings(user.id);
+                if (!cloudSettings || cancelled) return;
+
+                const merged = mergeSettingsWithDefault(cloudSettings as Partial<UserSettings>);
+                setSettings(merged);
+                await fetchMembers(merged.profile.email);
+            } catch (error) {
+                console.error('Failed to load settings from Firebase:', error);
+            }
+        };
+
+        syncCloudSettings();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchMembers, user?.id]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -239,7 +292,12 @@ export default function SettingsPage() {
             localStorage.setItem('srt-hst-settings', JSON.stringify(settings));
             window.dispatchEvent(new CustomEvent('srt-hst-settings-updated'));
 
-            // 2. Update real member data if linked
+            // 2. Save all settings to Firebase (including company)
+            if (user?.id) {
+                await saveUserSettings(user.id, settings as unknown as Record<string, unknown>);
+            }
+
+            // 3. Update real member data if linked
             if (currentMemberId) {
                 await updateMember(currentMemberId, {
                     name: settings.profile.name,
@@ -250,7 +308,7 @@ export default function SettingsPage() {
                 });
 
                 // Refresh members to reflect changes in list
-                await fetchMembers();
+                await fetchMembers(settings.profile.email);
             }
 
             setSaved(true);
@@ -360,6 +418,44 @@ export default function SettingsPage() {
                     });
                 } finally {
                     setSeeding(false);
+                }
+            },
+            onCancel: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+        });
+    };
+
+    const handleSeedFullDemoProject = async () => {
+        setAlertDialog({
+            isOpen: true,
+            title: 'Create Full Demo Project',
+            message: 'Do you want to create a complete demo project with tasks, expenses, and weekly logs?',
+            type: 'confirm',
+            onConfirm: async () => {
+                setAlertDialog(prev => ({ ...prev, isOpen: false }));
+                setSeedingFullDemo(true);
+                try {
+                    const result = await seedFullDemoProject();
+                    await fetchStats();
+                    setAlertDialog({
+                        isOpen: true,
+                        title: result.created ? 'Success' : 'Info',
+                        message: result.created
+                            ? `Project created\n- Tasks: ${result.taskCount}\n- Expenses: ${result.expenseCount}\n- Weekly Logs: ${result.weeklyLogCount}`
+                            : result.message,
+                        type: result.created ? 'success' : 'info',
+                        onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+                    });
+                } catch (error) {
+                    console.error('Error creating full demo project:', error);
+                    setAlertDialog({
+                        isOpen: true,
+                        title: 'Error',
+                        message: 'Failed to create full demo project',
+                        type: 'error',
+                        onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+                    });
+                } finally {
+                    setSeedingFullDemo(false);
                 }
             },
             onCancel: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
@@ -1111,6 +1207,14 @@ export default function SettingsPage() {
                                         >
                                             <Database className="w-3 h-3" />
                                             + เพิ่มข้อมูลตัวอย่าง
+                                        </button>
+                                        <button
+                                            onClick={handleSeedFullDemoProject}
+                                            disabled={seedingFullDemo}
+                                            className="px-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-sm hover:bg-indigo-50 flex items-center gap-1"
+                                        >
+                                            <Database className="w-3 h-3" />
+                                            {seedingFullDemo ? 'Creating...' : 'Create Full Demo Project'}
                                         </button>
                                         <button
                                             onClick={handleClearData}

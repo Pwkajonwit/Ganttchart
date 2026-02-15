@@ -93,6 +93,7 @@ export default function ProjectsPage() {
     // Filter projects
     const filteredProjects = projects.filter(project => {
         const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (project.code || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (project.description || '').toLowerCase().includes(searchQuery.toLowerCase());
 
         let matchesStatus = true;
@@ -138,7 +139,7 @@ export default function ProjectsPage() {
         setEditingProject(project);
         setFormData({
             name: project.name,
-            code: (project as any).code || '',
+            code: project.code || '',
             owner: project.owner,
             location: (project as any).location || '',
             description: project.description || '',
@@ -161,6 +162,7 @@ export default function ProjectsPage() {
                 // Update existing project
                 await updateProject(editingProject.id, {
                     name: formData.name,
+                    code: formData.code.trim(),
                     owner: formData.owner,
                     description: formData.description,
                     startDate: formData.startDate,
@@ -171,6 +173,7 @@ export default function ProjectsPage() {
                 // Create new project
                 await createProject({
                     name: formData.name,
+                    code: formData.code.trim(),
                     owner: formData.owner,
                     description: formData.description,
                     startDate: formData.startDate,
@@ -367,6 +370,11 @@ export default function ProjectsPage() {
                                                     <Building2 className="w-3 h-3 text-gray-400" />
                                                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide truncate">{project.owner}</span>
                                                 </div>
+                                                {project.code && (
+                                                    <p className="text-[11px] text-gray-500 mt-1 font-medium truncate">
+                                                        เลขที่โครงการ: {project.code}
+                                                    </p>
+                                                )}
                                             </div>
 
                                             {/* Menu & Status */}
@@ -522,6 +530,7 @@ export default function ProjectsPage() {
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">โครงการ</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">เลขที่โครงการ</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">เจ้าของ</th>
                                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Progress</th>
                                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">สถานะ</th>
@@ -555,6 +564,9 @@ export default function ProjectsPage() {
                                                         <span className="ml-2">({Math.max(0, differenceInDays(parseISO(project.endDate), parseISO(project.startDate)) + 1)} วัน)</span>
                                                     </p>
                                                 </Link>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700 font-medium">
+                                                {project.code || '-'}
                                             </td>
                                             <td className="px-4 py-3 text-sm text-gray-700">{project.owner}</td>
                                             <td className="px-4 py-3">
@@ -678,6 +690,17 @@ export default function ProjectsPage() {
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                         placeholder="เช่น Entrance 1 Construction"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">เลขที่โครงการ</label>
+                                    <input
+                                        type="text"
+                                        value={formData.code}
+                                        onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                                        placeholder="เช่น PJ-2026-001"
                                         className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
                                     />
                                 </div>
