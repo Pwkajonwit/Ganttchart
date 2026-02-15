@@ -15,6 +15,7 @@ export interface Project {
     categoryOrder?: string[];
     subcategoryOrder?: Record<string, string[]>; // { "categoryName": ["sub1", "sub2", ...] }
     color?: string;
+    googleSheetUrl?: string;
 }
 
 export interface Task {
@@ -155,6 +156,7 @@ export interface Expense {
     amount: number;
     description: string;
     date: string; // ISO date string YYYY-MM-DD
+    costCode?: string;
     type?: 'material' | 'labor' | 'subcontract' | 'overhead' | 'other';
     createdAt?: string;
 }
