@@ -3,8 +3,8 @@ import "./globals.css";
 import ClientLayout from "@/components/layout/ClientLayout";
 
 export const metadata: Metadata = {
-  title: "SRT-HST Construction Management",
-  description: "Full-Cycle Construction Management System - ระบบจัดการงานก่อสร้างแบบครบวงจร",
+  title: "Powertec Construction MS",
+  description: "Construction Management System - ระบบจัดการงานก่อสร้างแบบครบวงจร",
   keywords: ["construction", "management", "gantt chart", "s-curve", "progress tracking"],
 };
 
