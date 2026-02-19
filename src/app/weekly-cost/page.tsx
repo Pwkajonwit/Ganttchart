@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, DollarSign, TrendingUp, AlertCircle, FileText, CheckCircle2, AlertTriangle, Plus, Trash2, Wallet } from 'lucide-react';
@@ -649,14 +649,14 @@ export default function WeeklyCostPage() {
 
     }, [filteredTasks, filteredExpenses]);
 
-    const formatMoney = (amount: number) => `฿${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    const formatMoney = (amount: number) => `\u0E3F${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     const formatExpenseDate = (dateText: string) => {
         const parsed = parseISO(dateText);
         return isValid(parsed) ? format(parsed, 'dd MMM yy') : (dateText || '-');
     };
 
     return (
-        <div className="container mx-auto p-4 space-y-4 bg-white min-h-screen text-slate-800 font-sans">
+        <div className="container mx-auto p-4 space-y-4 bg-white min-h-screen text-slate-800">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-200 pb-4">
                 <div>
@@ -1004,7 +1004,7 @@ export default function WeeklyCostPage() {
                             <div className="bg-white rounded border border-gray-200 flex flex-col h-[500px]">
                                 <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                                     <h3 className="text-sm font-semibold text-gray-800">Expense History</h3>
-                                    <span className="text-[13px] font-mono text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded">
+                                    <span className="text-[13px] tabular-nums text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded">
                                         Total: {formatMoney(stats.actualCostToDate)}
                                     </span>
                                 </div>
@@ -1029,8 +1029,8 @@ export default function WeeklyCostPage() {
                                                             {formatExpenseDate(exp.date)}
                                                         </td>
                                                         <td className="px-4 py-2 font-medium text-gray-900">{exp.description}</td>
-                                                        <td className="px-4 py-2 text-gray-600 font-mono">{exp.costCode || UNASSIGNED_COST_CODE}</td>
-                                                        <td className="px-4 py-2 text-right text-rose-600 font-mono">{formatMoney(exp.amount)}</td>
+                                                        <td className="px-4 py-2 text-gray-600 tabular-nums">{exp.costCode || UNASSIGNED_COST_CODE}</td>
+                                                        <td className="px-4 py-2 text-right text-rose-600 tabular-nums">{formatMoney(exp.amount)}</td>
                                                         <td className="px-4 py-2 text-center">
                                                             <button
                                                                 onClick={() => handleDeleteExpense(exp.id)}
@@ -1054,7 +1054,7 @@ export default function WeeklyCostPage() {
                     <div className="bg-white rounded border border-gray-200 overflow-hidden">
                         <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                             <h3 className="text-sm font-semibold text-gray-800">Cost Code Performance</h3>
-                            <span className="text-[13px] font-mono text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded">
+                            <span className="text-[13px] tabular-nums text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded">
                                 Codes: {costCodeReport.breakdown.length}
                             </span>
                         </div>
@@ -1076,10 +1076,10 @@ export default function WeeklyCostPage() {
                                     <tbody className="divide-y divide-gray-100">
                                         <tr className="bg-slate-50 font-semibold text-slate-900 border-b border-gray-200">
                                             <td className="px-4 py-2.5">TOTAL</td>
-                                            <td className="px-4 py-2.5 text-right font-mono">{formatMoney(costCodeReport.totals.planned)}</td>
-                                            <td className="px-4 py-2.5 text-right font-mono">{formatMoney(costCodeReport.totals.earned)}</td>
-                                            <td className="px-4 py-2.5 text-right font-mono">{formatMoney(costCodeReport.totals.actual)}</td>
-                                            <td className={`px-4 py-2.5 text-right font-mono ${(costCodeReport.totals.earned - costCodeReport.totals.actual) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(costCodeReport.totals.planned)}</td>
+                                            <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(costCodeReport.totals.earned)}</td>
+                                            <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(costCodeReport.totals.actual)}</td>
+                                            <td className={`px-4 py-2.5 text-right tabular-nums ${(costCodeReport.totals.earned - costCodeReport.totals.actual) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                 {(costCodeReport.totals.earned - costCodeReport.totals.actual) >= 0 ? '+' : ''}
                                                 {formatMoney(costCodeReport.totals.earned - costCodeReport.totals.actual)}
                                             </td>
@@ -1100,10 +1100,10 @@ export default function WeeklyCostPage() {
                                                         Tasks: {row.taskCount} | Expenses: {row.expenseCount}
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-2 text-right font-mono text-[13px]">{formatMoney(row.planned)}</td>
-                                                <td className="px-4 py-2 text-right font-mono text-[13px]">{formatMoney(row.earned)}</td>
-                                                <td className="px-4 py-2 text-right font-mono text-[13px]">{formatMoney(row.actual)}</td>
-                                                <td className={`px-4 py-2 text-right font-mono text-[13px] font-medium ${row.variance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                <td className="px-4 py-2 text-right tabular-nums text-[13px]">{formatMoney(row.planned)}</td>
+                                                <td className="px-4 py-2 text-right tabular-nums text-[13px]">{formatMoney(row.earned)}</td>
+                                                <td className="px-4 py-2 text-right tabular-nums text-[13px]">{formatMoney(row.actual)}</td>
+                                                <td className={`px-4 py-2 text-right tabular-nums text-[13px] font-medium ${row.variance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                     {row.variance >= 0 ? '+' : ''}{formatMoney(row.variance)}
                                                 </td>
                                                 <td className="px-4 py-2 text-center">
@@ -1142,10 +1142,10 @@ export default function WeeklyCostPage() {
                                     {/* Summary Row */}
                                     <tr className="bg-slate-50 font-semibold text-slate-900 border-b border-gray-200">
                                         <td className="px-4 py-2.5">TOTAL (All Projects)</td>
-                                        <td className="px-4 py-2.5 text-right font-mono">{formatMoney(stats.plannedToDate)}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono">{formatMoney(stats.earnedToDate)}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono">{formatMoney(stats.actualCostToDate)}</td>
-                                        <td className={`px-4 py-2.5 text-right font-mono ${stats.costVariance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(stats.plannedToDate)}</td>
+                                        <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(stats.earnedToDate)}</td>
+                                        <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(stats.actualCostToDate)}</td>
+                                        <td className={`px-4 py-2.5 text-right tabular-nums ${stats.costVariance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                             {stats.costVariance > 0 ? '+' : ''}{formatMoney(stats.costVariance)}
                                         </td>
                                         <td className="px-4 py-2.5 text-center">
@@ -1212,16 +1212,16 @@ export default function WeeklyCostPage() {
                                                     {project.name}
                                                     <div className="text-[13px] text-gray-400 font-normal">{project.code}</div>
                                                 </td>
-                                                <td className="px-4 py-2 text-right text-gray-600 font-mono text-[13px]">
+                                                <td className="px-4 py-2 text-right text-gray-600 tabular-nums text-[13px]">
                                                     {formatMoney(pPV)}
                                                 </td>
-                                                <td className="px-4 py-2 text-right text-gray-600 font-mono text-[13px]">
+                                                <td className="px-4 py-2 text-right text-gray-600 tabular-nums text-[13px]">
                                                     {formatMoney(pEV)}
                                                 </td>
-                                                <td className="px-4 py-2 text-right text-gray-600 font-mono text-[13px]">
+                                                <td className="px-4 py-2 text-right text-gray-600 tabular-nums text-[13px]">
                                                     {formatMoney(pAC)}
                                                 </td>
-                                                <td className={`px-4 py-2 text-right font-mono text-[13px] font-medium ${isProfitable ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                <td className={`px-4 py-2 text-right tabular-nums text-[13px] font-medium ${isProfitable ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                     {isProfitable ? '+' : ''}{formatMoney(variance)}
                                                 </td>
                                                 <td className="px-4 py-2 text-center">

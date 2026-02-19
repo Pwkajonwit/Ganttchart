@@ -23,8 +23,11 @@ import {
     Info,
     AlertTriangle,
     CheckCircle2,
-    LogOut
+    LogOut,
+    Send
 } from 'lucide-react';
+import { getWeeklyCostStats, generateWeeklyReportFlexMessage } from '@/lib/report-service';
+import { sendLineFlexMessageAction } from '@/app/actions/line';
 import { getProjects, getAllTasks, seedSampleData, seedFullDemoProject, addProject, addTask, clearAllData, getMembers, createMember, updateMember, deleteMember, getUserSettings, saveUserSettings } from '@/lib/firestore';
 import { Task, Project, Member } from '@/types/construction';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,13 +52,13 @@ interface UserSettings {
         newComment: boolean;
         reportComplete: boolean;
         deadline: boolean;
+        telegramEnabled: boolean;
+        telegramBotToken: string;
+        telegramChatId: string;
         lineEnabled: boolean;
-        lineProvider: 'line-notify' | 'line-messaging-api';
-        lineToken: string;
-        lineGroupId: string;
-        lineGroupName: string;
         lineChannelAccessToken: string;
-        lineUserId: string;
+        lineGroupId: string;
+        lineUserIds: string[];
     };
     appearance: {
         theme: 'light' | 'dark' | 'system';
@@ -87,13 +90,13 @@ const defaultSettings: UserSettings = {
         newComment: true,
         reportComplete: false,
         deadline: true,
+        telegramEnabled: false,
+        telegramBotToken: '',
+        telegramChatId: '',
         lineEnabled: false,
-        lineProvider: 'line-notify',
-        lineToken: '',
-        lineGroupId: '',
-        lineGroupName: '',
         lineChannelAccessToken: '',
-        lineUserId: ''
+        lineGroupId: '',
+        lineUserIds: []
     },
     appearance: {
         theme: 'light',
@@ -141,6 +144,9 @@ export default function SettingsPage() {
     const [seedingFullDemo, setSeedingFullDemo] = useState(false);
     const [importing, setImporting] = useState(false);
     const [clearing, setClearing] = useState(false);
+    const [sendingTelegram, setSendingTelegram] = useState(false);
+    const [sendingLine, setSendingLine] = useState(false);
+
 
     // Alert Dialog State
     const [alertDialog, setAlertDialog] = useState<{
@@ -733,6 +739,165 @@ export default function SettingsPage() {
     };
 
     // Member functions
+    const handleSendTelegramTest = async () => {
+        if (!settings.notifications.telegramBotToken || !settings.notifications.telegramChatId) {
+            setAlertDialog({
+                isOpen: true,
+                title: 'ไม่สามารถส่งข้อความได้',
+                message: 'กรุณากรอก Telegram Bot Token และ Chat ID ให้ครบถ้วนก่อนส่ง',
+                type: 'warning',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
+
+        setSendingTelegram(true);
+        try {
+            // Send test message
+            const response = await fetch(`https://api.telegram.org/bot${settings.notifications.telegramBotToken}/sendMessage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: settings.notifications.telegramChatId,
+                    text: '🔔 ทดสอบการแจ้งเตือนจาก SRT-HST App\n\nระบบเชื่อมต่อ Telegram เรียบร้อยแล้ว!',
+                    parse_mode: 'Markdown'
+                })
+            });
+
+            if (response.ok) {
+                setAlertDialog({
+                    isOpen: true,
+                    title: 'สำเร็จ',
+                    message: 'ส่งข้อความทดสอบไปยัง Telegram เรียบร้อยแล้ว',
+                    type: 'success',
+                    onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+                });
+            } else {
+                throw new Error('Telegram API Error: ' + response.statusText);
+            }
+        } catch (error: any) {
+            console.error('Failed to send Telegram message:', error);
+            setAlertDialog({
+                isOpen: true,
+                title: 'เกิดข้อผิดพลาด',
+                message: `ไม่สามารถส่งข้อความได้: ${error.message || 'Unknown error'}`,
+                type: 'error',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally {
+            setSendingTelegram(false);
+        }
+    };
+
+    const handleSendLineTest = async () => {
+        if (!settings.notifications.lineChannelAccessToken) {
+            setAlertDialog({
+                isOpen: true,
+                title: 'ไม่สามารถส่งข้อความได้',
+                message: 'กรุณากรอก LINE Messaging API Token ก่อนส่ง',
+                type: 'warning',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
+
+        const targets = [];
+        if (settings.notifications.lineGroupId) targets.push(settings.notifications.lineGroupId);
+        if (settings.notifications.lineUserIds && settings.notifications.lineUserIds.length > 0) {
+            targets.push(...settings.notifications.lineUserIds.filter(id => id.trim() !== ''));
+        }
+
+        if (targets.length === 0) {
+            setAlertDialog({
+                isOpen: true,
+                title: 'ไม่สามารถส่งข้อความได้',
+                message: 'กรุณากรอก Group ID หรือ User ID อย่างน้อย 1 รายการ',
+                type: 'warning',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
+
+        setSendingLine(true);
+        try {
+            // Fetch stats 
+            const { stats, project } = await getWeeklyCostStats('all');
+
+            // Generate Flex Message
+            const flexMessage = generateWeeklyReportFlexMessage(stats, project, new Date());
+
+            // Send to all targets
+            const results = await Promise.all(targets.map(id =>
+                sendLineFlexMessageAction(
+                    settings.notifications.lineChannelAccessToken,
+                    id,
+                    flexMessage
+                )
+            ));
+
+            const failures = results.filter(r => !r.success);
+
+            if (failures.length === 0) {
+                setAlertDialog({
+                    isOpen: true,
+                    title: 'สำเร็จ',
+                    message: `ส่งรายงานไปยัง ${targets.length} ปลายทางเรียบร้อยแล้ว`,
+                    type: 'success',
+                    onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+                });
+            } else {
+                throw new Error(`${failures.length} messages failed to send.`);
+            }
+        } catch (error: any) {
+            console.error('Failed to send Line message:', error);
+            setAlertDialog({
+                isOpen: true,
+                title: 'เกิดข้อผิดพลาด',
+                message: `การส่งข้อความบางส่วนล้มเหลว: ${error.message || 'Unknown error'}`,
+                type: 'error',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally {
+            setSendingLine(false);
+        }
+    };
+
+    const addLineUserId = () => {
+        setSettings(prev => ({
+            ...prev,
+            notifications: {
+                ...prev.notifications,
+                lineUserIds: [...(prev.notifications.lineUserIds || []), '']
+            }
+        }));
+    };
+
+    const updateLineUserId = (index: number, value: string) => {
+        const newIds = [...(settings.notifications.lineUserIds || [])];
+        newIds[index] = value;
+        setSettings(prev => ({
+            ...prev,
+            notifications: {
+                ...prev.notifications,
+                lineUserIds: newIds
+            }
+        }));
+    };
+
+    const removeLineUserId = (index: number) => {
+        const newIds = [...(settings.notifications.lineUserIds || [])];
+        newIds.splice(index, 1);
+        setSettings(prev => ({
+            ...prev,
+            notifications: {
+                ...prev.notifications,
+                lineUserIds: newIds
+            }
+        }));
+    };
+
     const handleAddMember = async () => {
         if (!memberForm.name || !memberForm.email) {
             setAlertDialog({
@@ -991,7 +1156,60 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="space-y-4 pt-4 border-t border-gray-100">
-                                <h3 className="text-sm font-semibold text-gray-900">LINE Integration (รองรับการพัฒนาต่อ)</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Telegram Notification</h3>
+
+                                <label className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-sm">
+                                    <span className="text-sm text-gray-700">เปิดใช้งานแจ้งเตือนผ่าน Telegram</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.notifications.telegramEnabled}
+                                        onChange={(e) => updateNotification('telegramEnabled', e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                </label>
+
+                                {settings.notifications.telegramEnabled && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Telegram Bot Token</label>
+                                            <input
+                                                type="password"
+                                                value={settings.notifications.telegramBotToken}
+                                                onChange={(e) => updateNotification('telegramBotToken', e.target.value)}
+                                                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxYZ"
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors font-mono"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">รับ Token จาก @BotFather</p>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Chat ID / Channel ID</label>
+                                            <input
+                                                type="text"
+                                                value={settings.notifications.telegramChatId}
+                                                onChange={(e) => updateNotification('telegramChatId', e.target.value)}
+                                                placeholder="@channelname หรือ -100xxxxxxxxxx"
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors font-mono"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">ต้องเพิ่ม Bot เข้ากลุ่ม/Channel และกำหนดให้เป็น Admin ก่อน</p>
+                                        </div>
+
+                                        <div className="flex justify-start gap-3 pt-2">
+                                            <button
+                                                onClick={handleSendTelegramTest}
+                                                disabled={sendingTelegram || !settings.notifications.telegramBotToken || !settings.notifications.telegramChatId}
+                                                className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-sm hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {sendingTelegram ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                ทดสอบส่งข้อความ (Test Message)
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-4 pt-4 border-t border-gray-100">
+                                <h3 className="text-sm font-semibold text-gray-900">LINE Notification (Messaging API)</h3>
 
                                 <label className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-sm">
                                     <span className="text-sm text-gray-700">เปิดใช้งานแจ้งเตือนผ่าน LINE</span>
@@ -1003,78 +1221,77 @@ export default function SettingsPage() {
                                     />
                                 </label>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">ผู้ให้บริการ LINE</label>
-                                        <select
-                                            value={settings.notifications.lineProvider}
-                                            onChange={(e) => updateNotification('lineProvider', e.target.value as UserSettings['notifications']['lineProvider'])}
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                                        >
-                                            <option value="line-notify">LINE Notify (Legacy)</option>
-                                            <option value="line-messaging-api">LINE Messaging API</option>
-                                        </select>
-                                    </div>
+                                {settings.notifications.lineEnabled && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE Messaging API Token</label>
+                                            <input
+                                                type="password"
+                                                value={settings.notifications.lineChannelAccessToken}
+                                                onChange={(e) => updateNotification('lineChannelAccessToken', e.target.value)}
+                                                placeholder="Channel Access Token (Long string ending with =)"
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors font-mono"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">ใช้ Channel Access Token จาก LINE Developers Console</p>
+                                        </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE Group ID</label>
-                                        <input
-                                            type="text"
-                                            value={settings.notifications.lineGroupId}
-                                            onChange={(e) => updateNotification('lineGroupId', e.target.value)}
-                                            placeholder="เช่น Cxxxxxxxxxxxxxxxx"
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                                        />
-                                    </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Group ID (Target)</label>
+                                            <input
+                                                type="text"
+                                                value={settings.notifications.lineGroupId}
+                                                onChange={(e) => updateNotification('lineGroupId', e.target.value)}
+                                                placeholder="Cxxxxxxxxxxxxxxxx"
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors font-mono"
+                                            />
+                                        </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE Group Name (อ้างอิง)</label>
-                                        <input
-                                            type="text"
-                                            value={settings.notifications.lineGroupName}
-                                            onChange={(e) => updateNotification('lineGroupName', e.target.value)}
-                                            placeholder="เช่น Site Project A"
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                                        />
-                                    </div>
+                                        <div>
+                                            <div className="flex justify-between items-center mb-1.5">
+                                                <label className="block text-sm font-medium text-gray-700">User IDs (Personal)</label>
+                                                <button
+                                                    onClick={addLineUserId}
+                                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                                                >
+                                                    <UserPlus className="w-3 h-3" /> เพิ่ม User ID
+                                                </button>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {(settings.notifications.lineUserIds || []).map((userId, index) => (
+                                                    <div key={index} className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={userId}
+                                                            onChange={(e) => updateLineUserId(index, e.target.value)}
+                                                            placeholder="Uxxxxxxxxxxxxxxxx"
+                                                            className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors font-mono"
+                                                        />
+                                                        <button
+                                                            onClick={() => removeLineUserId(index)}
+                                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                {(settings.notifications.lineUserIds || []).length === 0 && (
+                                                    <p className="text-xs text-gray-400 italic">ไม่มี User ID ที่ระบุ</p>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE Token</label>
-                                        <input
-                                            type="password"
-                                            value={settings.notifications.lineToken}
-                                            onChange={(e) => updateNotification('lineToken', e.target.value)}
-                                            placeholder="ใส่ LINE token"
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                                        />
+                                        <div className="flex justify-start gap-3 pt-2">
+                                            <button
+                                                onClick={handleSendLineTest}
+                                                disabled={sendingLine || !settings.notifications.lineChannelAccessToken || (!settings.notifications.lineGroupId && (!settings.notifications.lineUserIds || settings.notifications.lineUserIds.length === 0))}
+                                                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-sm hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {sendingLine ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                Test Send (All Targets)
+                                            </button>
+                                        </div>
                                     </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Channel Access Token (Future)</label>
-                                        <input
-                                            type="password"
-                                            value={settings.notifications.lineChannelAccessToken}
-                                            onChange={(e) => updateNotification('lineChannelAccessToken', e.target.value)}
-                                            placeholder="ใช้สำหรับ LINE Messaging API ในอนาคต"
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                                        />
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">LINE User/Group Target ID (Future)</label>
-                                        <input
-                                            type="text"
-                                            value={settings.notifications.lineUserId}
-                                            onChange={(e) => updateNotification('lineUserId', e.target.value)}
-                                            placeholder="เช่น Uxxxxxxxx หรือ Cxxxxxxxx"
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-sm p-3">
-                                    ฟิลด์ชุดนี้ถูกออกแบบไว้เพื่อรองรับการพัฒนาต่อไป เช่น เชื่อมต่อ LINE Messaging API, ส่งแจ้งเตือนรายงานอัตโนมัติ และกำหนดกลุ่มเป้าหมายรายโครงการ
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -1414,52 +1631,54 @@ export default function SettingsPage() {
                     )}
                 </div>
             </div>
-            {alertDialog.isOpen && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-lg border border-gray-200 shadow-none max-w-sm w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
-                        <div className="p-6 text-center">
-                            <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center ${alertDialog.type === 'error' ? 'bg-red-100 text-red-600' :
-                                alertDialog.type === 'success' ? 'bg-green-100 text-green-600' :
-                                    alertDialog.type === 'confirm' ? 'bg-blue-100 text-blue-600' :
-                                        'bg-gray-100 text-gray-600'
-                                }`}>
-                                {alertDialog.type === 'error' && <AlertTriangle className="w-6 h-6" />}
-                                {alertDialog.type === 'success' && <CheckCircle2 className="w-6 h-6" />}
-                                {(alertDialog.type === 'confirm' || alertDialog.type === 'info') && <Info className="w-6 h-6" />}
-                                {alertDialog.type === 'warning' && <AlertTriangle className="w-6 h-6" />}
-                            </div>
+            {
+                alertDialog.isOpen && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-lg border border-gray-200 shadow-none max-w-sm w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
+                            <div className="p-6 text-center">
+                                <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center ${alertDialog.type === 'error' ? 'bg-red-100 text-red-600' :
+                                    alertDialog.type === 'success' ? 'bg-green-100 text-green-600' :
+                                        alertDialog.type === 'confirm' ? 'bg-blue-100 text-blue-600' :
+                                            'bg-gray-100 text-gray-600'
+                                    }`}>
+                                    {alertDialog.type === 'error' && <AlertTriangle className="w-6 h-6" />}
+                                    {alertDialog.type === 'success' && <CheckCircle2 className="w-6 h-6" />}
+                                    {(alertDialog.type === 'confirm' || alertDialog.type === 'info') && <Info className="w-6 h-6" />}
+                                    {alertDialog.type === 'warning' && <AlertTriangle className="w-6 h-6" />}
+                                </div>
 
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                {alertDialog.title}
-                            </h3>
-                            <p className="text-sm text-gray-500 mb-6 whitespace-pre-line">
-                                {alertDialog.message}
-                            </p>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                    {alertDialog.title}
+                                </h3>
+                                <p className="text-sm text-gray-500 mb-6 whitespace-pre-line">
+                                    {alertDialog.message}
+                                </p>
 
-                            <div className="flex gap-3 justify-center">
-                                {(alertDialog.type === 'confirm' || alertDialog.type === 'warning') && (
+                                <div className="flex gap-3 justify-center">
+                                    {(alertDialog.type === 'confirm' || alertDialog.type === 'warning') && (
+                                        <button
+                                            onClick={alertDialog.onCancel}
+                                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                                        >
+                                            ยกเลิก
+                                        </button>
+                                    )}
                                     <button
-                                        onClick={alertDialog.onCancel}
-                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                                        onClick={alertDialog.onConfirm}
+                                        className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${alertDialog.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                                            alertDialog.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                                                alertDialog.type === 'warning' ? 'bg-orange-500 hover:bg-orange-600' :
+                                                    'bg-black hover:bg-gray-800'
+                                            }`}
                                     >
-                                        ยกเลิก
+                                        ตกลง
                                     </button>
-                                )}
-                                <button
-                                    onClick={alertDialog.onConfirm}
-                                    className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${alertDialog.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
-                                        alertDialog.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
-                                            alertDialog.type === 'warning' ? 'bg-orange-500 hover:bg-orange-600' :
-                                                'bg-black hover:bg-gray-800'
-                                        }`}
-                                >
-                                    ตกลง
-                                </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

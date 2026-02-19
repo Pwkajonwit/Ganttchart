@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   keywords: ["construction", "management", "gantt chart", "s-curve", "progress tracking"],
 };
 
+
 export default function RootLayout({
   children,
 }: Readonly<{

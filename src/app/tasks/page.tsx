@@ -25,6 +25,7 @@ import {
 import { Task, Project, Member } from '@/types/construction';
 import { getAllTasks, getProjects, createTask, updateTask, deleteTask, updateTaskProgress, getMembers } from '@/lib/firestore';
 import { useAuth } from '@/contexts/AuthContext';
+import { todayISO, formatDateShort } from '@/lib/dateUtils';
 
 type StatusFilter = 'all' | 'completed' | 'in-progress' | 'not-started' | 'delayed';
 
@@ -78,7 +79,7 @@ export default function TasksPage() {
         taskName: '',
         currentProgress: 0,
         newProgress: 0,
-        updateDate: new Date().toISOString().split('T')[0],
+        updateDate: todayISO(),
         actualStartDate: '',
         actualEndDate: '',
         reason: ''
@@ -309,7 +310,7 @@ export default function TasksPage() {
             name: '',
             cost: 0,
             quantity: '',
-            planStartDate: new Date().toISOString().slice(0, 10),
+            planStartDate: todayISO(),
             planEndDate: '',
             planDuration: 30,
             progress: 0,
@@ -444,7 +445,7 @@ export default function TasksPage() {
             taskName: task.name,
             currentProgress: task.progress,
             newProgress: progress,
-            updateDate: task.progressUpdatedAt || new Date().toISOString().split('T')[0],
+            updateDate: task.progressUpdatedAt || todayISO(),
             actualStartDate: task.actualStartDate || '',
             actualEndDate: task.actualEndDate || '',
             reason: ''
@@ -730,11 +731,11 @@ export default function TasksPage() {
                                         <td className="px-4 py-3 text-center">
                                             <div className="flex flex-col text-xs">
                                                 <span className="text-gray-600">
-                                                    แผน: {new Date(task.planStartDate).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })} - {new Date(task.planEndDate).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                                    แผน: {formatDateShort(task.planStartDate)} - {formatDateShort(task.planEndDate)}
                                                 </span>
                                                 {task.actualStartDate && (
                                                     <span className="text-green-600 font-medium">
-                                                        จริง: {new Date(task.actualStartDate).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })} - {task.actualEndDate ? new Date(task.actualEndDate).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '...'}
+                                                        จริง: {formatDateShort(task.actualStartDate)} - {task.actualEndDate ? formatDateShort(task.actualEndDate) : '...'}
                                                     </span>
                                                 )}
                                             </div>
@@ -761,7 +762,7 @@ export default function TasksPage() {
                                             </div>
                                             {task.progressUpdatedAt && (
                                                 <p className="text-xs text-gray-500 mt-1 text-center">
-                                                    อัพเดท: {new Date(task.progressUpdatedAt).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                                    อัพเดท: {formatDateShort(task.progressUpdatedAt)}
                                                 </p>
                                             )}
                                         </td>

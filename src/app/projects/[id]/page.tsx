@@ -36,31 +36,17 @@ import {
     Layout
 } from 'lucide-react';
 import { format, parseISO, differenceInDays, addDays } from 'date-fns';
+import { todayISO, formatDateShort, calcDurationDays, parseLocalDate } from '@/lib/dateUtils';
 import { Project, Task, Employee } from '@/types/construction';
 import { getProject, getTasks, createTask, updateTask, deleteTask, getEmployees, syncGroupProgress, batchCreateTasks, deleteAllTasks } from '@/lib/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { COST_CODES, getCostCodeName } from '@/constants/costCodes';
 
-// Helper: Format date to Thai format
-const formatDateTH = (dateStr: string | undefined | null) => {
-    if (!dateStr) return '-';
-    try {
-        const date = parseISO(dateStr);
-        return format(date, 'dd/MM/yy');
-    } catch {
-        return '-';
-    }
-};
+// Helper: Format date to Thai short format (uses centralized dateUtils)
+const formatDateTH = (dateStr: string | undefined | null) => formatDateShort(dateStr);
 
-// Helper: Calculate duration in days
-const calcDuration = (start: string, end: string) => {
-    if (!start || !end) return 0;
-    try {
-        return differenceInDays(parseISO(end), parseISO(start)) + 1;
-    } catch {
-        return 0;
-    }
-};
+// Helper: Calculate duration in days (uses centralized dateUtils)
+const calcDuration = (start: string, end: string) => calcDurationDays(start, end);
 
 export default function ProjectDetailPage() {
     const { user } = useAuth();
@@ -111,7 +97,7 @@ export default function ProjectDetailPage() {
         taskId: '',
         taskName: '',
         newProgress: 0,
-        updateDate: new Date().toISOString().split('T')[0],
+        updateDate: todayISO(),
         actualStartDate: '',
         actualEndDate: '',
         planStartDate: '',
@@ -431,7 +417,7 @@ export default function ProjectDetailPage() {
             name: '',
             cost: 0,
             quantity: '',
-            planStartDate: project?.startDate || new Date().toISOString().split('T')[0],
+            planStartDate: project?.startDate || todayISO(),
             planEndDate: project?.endDate || '',
             progress: 0,
             responsible: '',
@@ -467,7 +453,7 @@ export default function ProjectDetailPage() {
             progress: task.progress || 0,
             responsible: task.responsible || '',
             assignedEmployeeIds: task.assignedEmployeeIds || fallbackAssignedIds,
-            planDuration: task.planDuration || (task.planStartDate && task.planEndDate ? differenceInDays(parseISO(task.planEndDate), parseISO(task.planStartDate)) + 1 : 1),
+            planDuration: task.planDuration || calcDurationDays(task.planStartDate, task.planEndDate) || 1,
             costCode: task.costCode || ''
         });
         setIsModalOpen(true);
@@ -1008,7 +994,7 @@ export default function ProjectDetailPage() {
             taskId: task.id,
             taskName: task.name,
             newProgress: task.progress,
-            updateDate: new Date().toISOString().split('T')[0],
+            updateDate: todayISO(),
             actualStartDate: task.actualStartDate || '',
             actualEndDate: task.actualEndDate || '',
             planStartDate: task.planStartDate || '',
