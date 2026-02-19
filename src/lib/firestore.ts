@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Project, Task, WeeklyLog, Member, Employee, Expense } from '@/types/construction';
+import { todayISO, calcDurationDays } from '@/lib/dateUtils';
 import { differenceInDays, parseISO } from 'date-fns';
 
 // Helper to remove undefined values for Firestore
@@ -216,7 +217,7 @@ export async function updateTaskProgress(taskId: string, progress: number): Prom
     if (!task) return;
 
     const docRef = doc(db, 'tasks', taskId);
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const today = todayISO();
 
     let status: Task['status'] = 'not-started';
     if (progress === 100) status = 'completed';
@@ -331,28 +332,14 @@ export async function updateWeeklyLog(logId: string, data: Partial<WeeklyLog>): 
 
 export async function calculateProjectProgress(projectId: string): Promise<number> {
     const tasks = await getTasks(projectId);
-
     if (tasks.length === 0) return 0;
-
-    // Calculate total duration of all tasks for weighting
-    const totalDuration = tasks.reduce((sum, task) => {
-        const start = new Date(task.planStartDate);
-        const end = new Date(task.planEndDate);
-        const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        return sum + Math.max(0, duration);
-    }, 0);
-
+    const totalDuration = tasks.reduce((sum, task) => sum + Math.max(0, calcDurationDays(task.planStartDate, task.planEndDate)), 0);
     if (totalDuration <= 0) return 0;
-
-    // Calculate weighted progress based on duration
     const weightedProgress = tasks.reduce((sum, task) => {
-        const start = new Date(task.planStartDate);
-        const end = new Date(task.planEndDate);
-        const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        const weight = (duration / totalDuration) * 100;
+        const duration = calcDurationDays(task.planStartDate, task.planEndDate);
+        const weight = (totalDuration > 0 ? duration / totalDuration : 0) * 100;
         return sum + (weight * (Number(task.progress) || 0) / 100);
     }, 0);
-
     return weightedProgress;
 }
 
