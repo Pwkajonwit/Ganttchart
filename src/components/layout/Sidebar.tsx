@@ -18,7 +18,8 @@ import {
     Users,
     Menu,
     X,
-    DollarSign
+    DollarSign,
+    Bell
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -39,6 +40,7 @@ const navigation: NavItem[] = [
     { name: 'Employees', nameTh: 'พนักงาน', href: '/employees', icon: Users },
     { name: 'Reports', nameTh: 'รายงาน', href: '/reports', icon: FileSpreadsheet },
     { name: 'Convert CSV', nameTh: 'แปลงไฟล์ CSV', href: '/convert-csv', icon: CalendarDays },
+    { name: 'Notifications', nameTh: 'ทดสอบแจ้งเตือน', href: '/notifications', icon: Bell },
     { name: 'Settings', nameTh: 'ตั้งค่า', href: '/settings', icon: Settings },
 ];
 
@@ -119,7 +121,7 @@ export default function Sidebar() {
                 </div>
                 {!collapsed && (
                     <div>
-                        <h1 className="text-gray-900 font-semibold text-base">{brandName}</h1>
+                        <h3 className="text-gray-900 font-semibold text-base">{brandName}</h3>
                         <p className="text-gray-600 text-xs">Construction MS</p>
                     </div>
                 )}
