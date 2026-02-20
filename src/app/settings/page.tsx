@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { isSameWeek, subWeeks, parseISO } from 'date-fns';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -26,7 +27,15 @@ import {
     LogOut,
     Send
 } from 'lucide-react';
-import { getWeeklyCostStats, generateWeeklyReportFlexMessage } from '@/lib/report-service';
+import {
+    getWeeklyCostStats,
+    generateWeeklyReportFlexMessage
+} from '@/lib/report-service';
+import {
+    generateTasksFlexMessage,
+    generateProjectProgressFlexMessage,
+    generateProcurementFlexMessage
+} from '@/lib/line-flex-templates';
 import { sendLineFlexMessageAction } from '@/app/actions/line';
 import { getProjects, getAllTasks, seedSampleData, seedFullDemoProject, addProject, addTask, clearAllData, getMembers, createMember, updateMember, deleteMember, getUserSettings, saveUserSettings } from '@/lib/firestore';
 import { Task, Project, Member } from '@/types/construction';
@@ -263,7 +272,8 @@ export default function SettingsPage() {
         return () => {
             cancelled = true;
         };
-    }, [fetchStats, fetchMembers]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Sync cloud settings when user session is ready
     useEffect(() => {
@@ -274,10 +284,15 @@ export default function SettingsPage() {
 
             try {
                 const cloudSettings = await getUserSettings(user.id);
-                if (!cloudSettings || cancelled) return;
+                // IF no settings found in cloud, skip overriding local
+                if (!cloudSettings || Object.keys(cloudSettings).length === 0 || cancelled) return;
 
                 const merged = mergeSettingsWithDefault(cloudSettings as Partial<UserSettings>);
                 setSettings(merged);
+
+                // ALSO WE SHOULD SAVE TO LOCAL STORAGE SO WE STAY IN SYNC
+                localStorage.setItem('srt-hst-settings', JSON.stringify(merged));
+
                 await fetchMembers(merged.profile.email);
             } catch (error) {
                 console.error('Failed to load settings from Firebase:', error);
@@ -289,7 +304,8 @@ export default function SettingsPage() {
         return () => {
             cancelled = true;
         };
-    }, [fetchMembers, user?.id]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -822,33 +838,84 @@ export default function SettingsPage() {
 
         setSendingLine(true);
         try {
-            // Fetch stats 
+            // Fetch stats and tasks for demo reports
             const { stats, project } = await getWeeklyCostStats('all');
+            const tasks = await getAllTasks();
 
-            // Generate Flex Message
-            const flexMessage = generateWeeklyReportFlexMessage(stats, project, new Date());
+            // 1. Weekly S-Curve Report
+            const sCurveMessage = generateWeeklyReportFlexMessage(stats, project, new Date());
 
-            // Send to all targets
-            const results = await Promise.all(targets.map(id =>
-                sendLineFlexMessageAction(
-                    settings.notifications.lineChannelAccessToken,
-                    id,
-                    flexMessage
-                )
-            ));
+            // 2. Project Progress Summary
+            const progressMessage = project
+                ? generateProjectProgressFlexMessage(project)
+                : generateProjectProgressFlexMessage({ name: 'สรุปทุกโครงการ', overallProgress: stats.totalBudget > 0 ? (stats.earnedToDate / stats.totalBudget) * 100 : 0 } as any);
 
-            const failures = results.filter(r => !r.success);
+            const now = new Date();
+            const lastWeek = subWeeks(now, 1);
 
-            if (failures.length === 0) {
+            // 3. This Week Tasks (งานแผนสัปดาห์นี้) - Tasks that are planned/active this week
+            const thisWeekTasks = tasks.filter(t => {
+                if (!t.planStartDate || !t.planEndDate) return false;
+                try {
+                    const start = parseISO(t.planStartDate);
+                    const end = parseISO(t.planEndDate);
+                    return t.status !== 'completed' &&
+                        (isSameWeek(start, now, { weekStartsOn: 1 }) ||
+                            isSameWeek(end, now, { weekStartsOn: 1 }) ||
+                            (start <= now && end >= now));
+                } catch { return false; }
+            });
+            const thisWeekMessage = generateTasksFlexMessage('📅 แผนงานสัปดาห์นี้', thisWeekTasks, project, '#2563eb');
+
+            // 4. Last Week Tasks (งานสัปดาห์ที่ผ่านมา)
+            const lastWeekTasks = tasks.filter(t => {
+                if (!t.planStartDate || !t.planEndDate) return false;
+                try {
+                    const start = parseISO(t.planStartDate);
+                    const end = parseISO(t.planEndDate);
+                    return (isSameWeek(start, lastWeek, { weekStartsOn: 1 }) ||
+                        isSameWeek(end, lastWeek, { weekStartsOn: 1 }) ||
+                        (start <= lastWeek && end >= lastWeek));
+                } catch { return false; }
+            });
+            const lastWeekMessage = generateTasksFlexMessage('⏮️ งานสัปดาห์ที่ผ่านมา', lastWeekTasks, project, '#64748b');
+
+            // 5. Procurement Alerts
+            const procTasks = tasks.filter(t => t.procurementStatus && t.procurementStatus !== 'delivered' && t.dateOfUse);
+            const procMessage = generateProcurementFlexMessage(procTasks, project);
+
+            // Send all messages in sequence to all targets
+            const messagesToSend = [
+                progressMessage,
+                sCurveMessage,
+                thisWeekMessage,
+                lastWeekMessage,
+                ...((procTasks.length > 0) ? [procMessage] : [])
+            ];
+
+            let allFailures = 0;
+
+            for (const targetId of targets) {
+                for (const message of messagesToSend) {
+                    const res = await sendLineFlexMessageAction(
+                        settings.notifications.lineChannelAccessToken,
+                        targetId,
+                        message
+                    );
+                    if (!res.success) allFailures++;
+                }
+            }
+
+            if (allFailures === 0) {
                 setAlertDialog({
                     isOpen: true,
                     title: 'สำเร็จ',
-                    message: `ส่งรายงานไปยัง ${targets.length} ปลายทางเรียบร้อยแล้ว`,
+                    message: `ส่งรายงานจำนวน ${messagesToSend.length} รูปแบบ ไปยัง ${targets.length} ปลายทางเรียบร้อยแล้ว`,
                     type: 'success',
                     onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
                 });
             } else {
-                throw new Error(`${failures.length} messages failed to send.`);
+                throw new Error(`${allFailures} messages failed to send.`);
             }
         } catch (error: any) {
             console.error('Failed to send Line message:', error);
@@ -995,20 +1062,6 @@ export default function SettingsPage() {
         return <span className={`px-2 py-0.5 text-xs font-medium rounded-sm ${config.class}`}>{config.label}</span>;
     };
 
-    const notificationToggleItems: Array<{
-        key: 'email' | 'push' | 'sms' | 'taskDelay' | 'progressUpdate' | 'newComment' | 'reportComplete' | 'deadline';
-        label: string;
-    }> = [
-            { key: 'email', label: 'อีเมล' },
-            { key: 'push', label: 'Push Notification' },
-            { key: 'sms', label: 'SMS' },
-            { key: 'taskDelay', label: 'แจ้งเตือนงานล่าช้า' },
-            { key: 'progressUpdate', label: 'แจ้งเตือนอัปเดตความคืบหน้า' },
-            { key: 'newComment', label: 'แจ้งเตือนคอมเมนต์ใหม่' },
-            { key: 'reportComplete', label: 'แจ้งเตือนรายงานเสร็จสิ้น' },
-            { key: 'deadline', label: 'แจ้งเตือนใกล้กำหนดส่ง' }
-        ];
-
     const allTabs = [
         { id: 'profile', label: 'โปรไฟล์', icon: User, roles: ['admin', 'project_manager', 'engineer', 'viewer'] },
         { id: 'notifications', label: 'การแจ้งเตือน', icon: Bell, roles: ['admin', 'project_manager', 'engineer', 'viewer'] },
@@ -1136,23 +1189,6 @@ export default function SettingsPage() {
                             <div>
                                 <h2 className="text-lg font-semibold text-gray-900">ตั้งค่าการแจ้งเตือน</h2>
                                 <p className="text-gray-500 text-sm mt-0.5">กำหนดช่องทางแจ้งเตือน และตั้งค่า LINE สำหรับพัฒนาต่อในอนาคต</p>
-                            </div>
-
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-gray-900">ช่องทางแจ้งเตือนทั่วไป</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {notificationToggleItems.map((item) => (
-                                        <label key={item.key} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-sm">
-                                            <span className="text-sm text-gray-700">{item.label}</span>
-                                            <input
-                                                type="checkbox"
-                                                checked={settings.notifications[item.key]}
-                                                onChange={(e) => updateNotification(item.key, e.target.checked)}
-                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                        </label>
-                                    ))}
-                                </div>
                             </div>
 
                             <div className="space-y-4 pt-4 border-t border-gray-100">
