@@ -9,6 +9,7 @@ interface UsePdfExportOptions {
     margin?: string;
     allowSVG?: boolean;
     fitToWidth?: boolean;
+    fitToWidthMinScale?: number;
 }
 
 const defaultOptions: UsePdfExportOptions = {
@@ -16,7 +17,8 @@ const defaultOptions: UsePdfExportOptions = {
     orientation: 'landscape',
     margin: '10mm',
     allowSVG: false,
-    fitToWidth: false
+    fitToWidth: false,
+    fitToWidthMinScale: 0.25
 };
 
 export function usePdfExport(options: UsePdfExportOptions = {}) {
@@ -27,7 +29,8 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
         if (!containerRef.current) return;
 
         const element = containerRef.current;
-        const scrollContainer = element.querySelector('.overflow-auto') as HTMLElement;
+        const scrollContainer = (element.querySelector('[data-pdf-scroll-container]') || element.querySelector('.overflow-auto')) as HTMLElement | null;
+        const originalId = element.id;
 
         // Store original styles
         const originalStyles = {
@@ -35,7 +38,10 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
             overflow: element.style.overflow,
             scrollHeight: scrollContainer?.style.height,
             scrollOverflow: scrollContainer?.style.overflow,
-            scrollPosition: scrollContainer?.style.position
+            scrollOverflowX: scrollContainer?.style.overflowX,
+            scrollOverflowY: scrollContainer?.style.overflowY,
+            scrollPosition: scrollContainer?.style.position,
+            scrollBarWidth: scrollContainer?.style.getPropertyValue('scrollbar-width')
         };
 
         // Expand content for full capture
@@ -44,7 +50,10 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
         if (scrollContainer) {
             scrollContainer.style.height = 'auto';
             scrollContainer.style.overflow = 'visible';
+            scrollContainer.style.overflowX = 'visible';
+            scrollContainer.style.overflowY = 'visible';
             scrollContainer.style.position = 'relative';
+            scrollContainer.style.setProperty('scrollbar-width', 'none');
         }
 
         // Create print-specific styles
@@ -75,6 +84,25 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
                     left: 0;
                     top: 0;
                     width: 100%;
+                }
+
+                #pdf-export-container [data-pdf-scroll-container] {
+                    overflow: visible !important;
+                    overflow-x: visible !important;
+                    overflow-y: visible !important;
+                }
+
+                /* Remove scrollbar gutter while printing to maximize usable width */
+                #pdf-export-container,
+                #pdf-export-container * {
+                    scrollbar-width: none !important;
+                }
+
+                #pdf-export-container::-webkit-scrollbar,
+                #pdf-export-container *::-webkit-scrollbar {
+                    width: 0 !important;
+                    height: 0 !important;
+                    display: none !important;
                 }
                 
                 ${!mergedOptions.allowSVG ? `
@@ -130,14 +158,14 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
 
                 if (contentWidth > targetWidth) {
                     const rawScale = targetWidth / contentWidth;
-                    // Limit minimum scale to 0.6 to prevent unreadable text
-                    const scale = Math.max(rawScale, 0.6);
+                    // Keep scale readable while still fitting full timeline.
+                    const scale = Math.max(rawScale, mergedOptions.fitToWidthMinScale || 0.25);
 
                     printStyles.textContent += `
                         @media print {
                             #pdf-export-container {
-                                transform: scale(${scale});
-                                transform-origin: top left;
+                                zoom: ${scale};
+                                transform: none !important;
                                 width: ${contentWidth}px !important;
                                 max-width: none !important;
                             }
@@ -152,12 +180,15 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
             setTimeout(() => {
                 element.style.height = originalStyles.height;
                 element.style.overflow = originalStyles.overflow;
-                element.id = '';
+                element.id = originalId;
 
                 if (scrollContainer) {
                     scrollContainer.style.height = originalStyles.scrollHeight || '';
                     scrollContainer.style.overflow = originalStyles.scrollOverflow || '';
+                    scrollContainer.style.overflowX = originalStyles.scrollOverflowX || '';
+                    scrollContainer.style.overflowY = originalStyles.scrollOverflowY || '';
                     scrollContainer.style.position = originalStyles.scrollPosition || '';
+                    scrollContainer.style.setProperty('scrollbar-width', originalStyles.scrollBarWidth || '');
                 }
 
                 // Remove print styles
@@ -165,7 +196,7 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
                 if (printStyleEl) printStyleEl.remove();
             }, 500);
         }, 500); // Increased delay for safety
-    }, [mergedOptions.pageSize, mergedOptions.orientation, mergedOptions.margin, mergedOptions.allowSVG, mergedOptions.fitToWidth]);
+    }, [mergedOptions.pageSize, mergedOptions.orientation, mergedOptions.margin, mergedOptions.allowSVG, mergedOptions.fitToWidth, mergedOptions.fitToWidthMinScale]);
 
     return {
         containerRef,

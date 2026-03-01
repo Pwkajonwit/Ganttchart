@@ -539,6 +539,7 @@ export default function GanttChart({
 
     const [scrollTop, setScrollTop] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
 
     const virtualData = useMemo(() => {
         const map = new Map<string, number>();
@@ -660,7 +661,54 @@ export default function GanttChart({
     }, [visibleColumns, EMPLOYEE_COL_WIDTH, isProcurementMode]);
 
     // PDF Export
-    const { containerRef: chartContainerRef, exportToPdf: handleExportPDF } = usePdfExport({ title, pageSize: 'A3', orientation: 'landscape' });
+    const { containerRef: chartContainerRef, exportToPdf } = usePdfExport({
+        title,
+        pageSize: 'A3',
+        orientation: 'landscape',
+        margin: '4mm',
+        fitToWidth: true,
+        fitToWidthMinScale: 0.1
+    });
+
+    const handleExportPDF = () => {
+        if (isExportingPdf) return;
+
+        const scrollEl = scrollContainerRef.current;
+        const previousScrollTop = scrollEl?.scrollTop ?? 0;
+        const previousScrollLeft = scrollEl?.scrollLeft ?? 0;
+        let finalized = false;
+
+        const finalize = () => {
+            if (finalized) return;
+            finalized = true;
+            setIsExportingPdf(false);
+
+            if (scrollEl) {
+                scrollEl.scrollTo({ top: previousScrollTop, left: previousScrollLeft, behavior: 'auto' });
+            }
+            setScrollTop(previousScrollTop);
+            setScrollLeft(previousScrollLeft);
+        };
+
+        if (scrollEl) {
+            scrollEl.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        }
+        setScrollTop(0);
+        setScrollLeft(0);
+        setIsExportingPdf(true);
+
+        const afterPrintHandler = () => finalize();
+        window.addEventListener('afterprint', afterPrintHandler, { once: true });
+
+        setTimeout(() => {
+            exportToPdf();
+            // Fallback in case afterprint is not fired by browser
+            setTimeout(() => {
+                window.removeEventListener('afterprint', afterPrintHandler);
+                finalize();
+            }, 2500);
+        }, 150);
+    };
 
     // Handlers needed for children
     const getChildTasks = (parentId: string) => optimisticTasks.filter(t => t.parentTaskId === parentId).sort((a, b) => a.order - b.order);
@@ -945,9 +993,9 @@ export default function GanttChart({
     return (
         <div
             ref={chartContainerRef}
-            className={`relative flex flex-col bg-white border border-gray-300 w-full max-w-full overflow-hidden font-sans ${isExpanded
+            className={`relative flex flex-col bg-white border border-gray-300 w-full max-w-full font-sans ${isExportingPdf ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded
                 ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none'
-                : 'h-[750px] rounded'
+                : isExportingPdf ? 'h-auto rounded' : 'h-[750px] rounded'
                 }`}
         >
             <GanttToolbar
@@ -1011,8 +1059,18 @@ export default function GanttChart({
                 </div>
             )}
 
-            <div className="flex-1 min-h-0 w-full relative">
-                <div ref={scrollContainerRef} className="absolute inset-0 overflow-auto custom-scrollbar" onScroll={(e) => { setScrollTop(e.currentTarget.scrollTop); setScrollLeft(e.currentTarget.scrollLeft); }}>
+            <div className={`w-full ${isExportingPdf ? '' : 'flex-1 min-h-0 relative'}`}>
+                <div
+                    ref={scrollContainerRef}
+                    data-pdf-scroll-container
+                    className={isExportingPdf ? 'relative overflow-visible' : 'absolute inset-0 overflow-auto custom-scrollbar'}
+                    onScroll={(e) => {
+                        if (!isExportingPdf) {
+                            setScrollTop(e.currentTarget.scrollTop);
+                            setScrollLeft(e.currentTarget.scrollLeft);
+                        }
+                    }}
+                >
                     <div className="min-w-max flex flex-col">
                         <TimelineHeader
                             viewMode={viewMode}
@@ -1182,9 +1240,9 @@ export default function GanttChart({
                                 );
                             })()}
 
-                            <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
-                                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${offsetY}px)` }}>
-                                    {visibleRows.map((row) => {
+                            <div style={isExportingPdf ? undefined : { height: `${totalHeight}px`, position: 'relative' }}>
+                                <div style={isExportingPdf ? undefined : { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${offsetY}px)` }}>
+                                    {(isExportingPdf ? virtualData.rows : visibleRows).map((row) => {
                                         if (row.type === 'category') {
                                             const { category, catData } = row;
                                             return (
