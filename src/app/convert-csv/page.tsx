@@ -56,6 +56,19 @@ interface TemplateSnapshot {
   };
 }
 
+type IssueLevel = 'error' | 'warning';
+
+interface ProcessingIssue {
+  level: IssueLevel;
+  row: number | 'system';
+  message: string;
+}
+
+interface ProcessedResult {
+  rows: ProcessedRow[];
+  issues: ProcessingIssue[];
+}
+
 const DEFAULT_MAPPINGS: Mappings = {
   cat: 'A',
   task: 'B',
@@ -96,6 +109,24 @@ function addDays(dateObj: Date, days: number) {
   const res = new Date(dateObj);
   res.setDate(res.getDate() + days);
   return res;
+}
+
+function isLikelyDate(value: string) {
+  const v = value.trim();
+  if (!v) return true;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return true;
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)) return true;
+  const d = new Date(v);
+  return !Number.isNaN(d.getTime());
+}
+
+function normalizeStatus(value: string): string {
+  const v = value.trim().toLowerCase();
+  if (!v) return 'not-started';
+  if (['completed', 'complete', 'done', 'finished', '100%'].includes(v)) return 'completed';
+  if (['in-progress', 'in progress', 'progress', 'doing', 'ongoing'].includes(v)) return 'in-progress';
+  if (['not-started', 'not started', 'todo', 'pending', 'new', '0%'].includes(v)) return 'not-started';
+  return 'not-started';
 }
 
 export default function ConvertCsvPage() {
@@ -172,8 +203,9 @@ export default function ConvertCsvPage() {
     setTemplateName(selectedTemplate);
   }, [selectedTemplate]);
 
-  const processData = useMemo<ProcessedRow[]>(() => {
-    if (!rawData.length) return [];
+  const processing = useMemo<ProcessedResult>(() => {
+    const issues: ProcessingIssue[] = [];
+    if (!rawData.length) return { rows: [], issues };
 
     const { cat, task, qty, unit, cost, resp, start, end, progress, status, costCode } = mappings;
     const rows: ProcessedRow[] = [];
@@ -185,8 +217,43 @@ export default function ConvertCsvPage() {
     let lastSub2: string | null = null;
     const startIdx = Math.max(0, startRow - 1);
 
+    const mappedEntries = (Object.entries(mappings) as Array<[keyof Mappings, string]>).filter(([, col]) => col && col !== 'None');
+    const byCol = new Map<string, string[]>();
+    mappedEntries.forEach(([key, col]) => {
+      const list = byCol.get(col) || [];
+      list.push(key);
+      byCol.set(col, list);
+    });
+    byCol.forEach((keys, col) => {
+      if (keys.length > 1) {
+        issues.push({
+          level: 'error',
+          row: 'system',
+          message: `Column ${col} is used by multiple fields (${keys.join(', ')}).`
+        });
+      }
+    });
+    if (task === 'None') {
+      issues.push({ level: 'error', row: 'system', message: 'Task Name mapping is required.' });
+    }
+    if (!autoSchedule.enabled && start !== 'None' && end === 'None') {
+      issues.push({ level: 'warning', row: 'system', message: 'Start is mapped but End is not mapped.' });
+    }
+    if (!autoSchedule.enabled && end !== 'None' && start === 'None') {
+      issues.push({ level: 'warning', row: 'system', message: 'End is mapped but Start is not mapped.' });
+    }
+    if (startIdx >= rawData.length) {
+      issues.push({
+        level: 'error',
+        row: 'system',
+        message: `Start row ${startRow} is beyond file rows (${rawData.length}).`
+      });
+      return { rows, issues };
+    }
+
     for (let i = startIdx; i < rawData.length; i += 1) {
       const row = rawData[i];
+      const rowNo = i + 1;
       if (!row || row.length === 0) continue;
 
       const vCat = getColVal(row, cat);
@@ -222,11 +289,25 @@ export default function ConvertCsvPage() {
         }
       }
 
-      if (!vTask) continue;
+      if (!vTask) {
+        if (hasData) {
+          issues.push({ level: 'warning', row: rowNo, message: 'Skipped row: has quantity/cost but Task Name is empty.' });
+        }
+        continue;
+      }
 
       let pStart = getColVal(row, start);
       let pEnd = getColVal(row, end);
       let duration: string | number = '';
+
+      if (!autoSchedule.enabled) {
+        if (pStart && !isLikelyDate(pStart)) {
+          issues.push({ level: 'warning', row: rowNo, message: `Start date format looks invalid: "${pStart}"` });
+        }
+        if (pEnd && !isLikelyDate(pEnd)) {
+          issues.push({ level: 'warning', row: rowNo, message: `End date format looks invalid: "${pEnd}"` });
+        }
+      }
 
       if (autoSchedule.enabled && schedDate) {
         const days1 = autoSchedule.daysPerSub;
@@ -247,26 +328,44 @@ export default function ConvertCsvPage() {
         duration = usedDuration;
       }
 
+      const normalizedCost = vCost.replace(/,/g, '').trim();
+      if (normalizedCost && Number.isNaN(Number(normalizedCost))) {
+        issues.push({ level: 'warning', row: rowNo, message: `Cost is not numeric: "${vCost}"` });
+      }
+
+      if (!curCat) {
+        issues.push({
+          level: 'warning',
+          row: rowNo,
+          message: 'Task has no active category context. Assigned to "Uncategorized".'
+        });
+      }
+
       rows.push({
-        Category: curCat,
+        Category: curCat || 'Uncategorized',
         SubCategory: curSub,
         SubSubCategory: curSubSub,
         TaskName: vTask,
         Quantity: vQty && vUnit ? `${vQty} ${vUnit}` : vQty,
-        Cost: vCost.replace(/,/g, ''),
+        Cost: normalizedCost,
         Responsible: vResp,
         PlanStart: pStart,
         PlanEnd: pEnd,
         Duration: duration,
         Progress: getColVal(row, progress) || '0',
-        Status: getColVal(row, status) || 'not-started',
+        Status: normalizeStatus(getColVal(row, status)),
         CostCode: vCostCode,
         Type: 'task'
       });
     }
 
-    return rows;
+    return { rows, issues };
   }, [rawData, mappings, startRow, autoSchedule]);
+
+  const processData = processing.rows;
+  const processingIssues = processing.issues;
+  const errorCount = processingIssues.filter((x) => x.level === 'error').length;
+  const warningCount = processingIssues.length - errorCount;
 
   const getSnapshot = (): TemplateSnapshot => ({
     mappings: { ...mappings },
@@ -308,6 +407,10 @@ export default function ConvertCsvPage() {
   };
 
   const generateCSV = async () => {
+    if (errorCount > 0) {
+      alert(`Please fix ${errorCount} mapping/data error(s) before export.`);
+      return;
+    }
     if (!processData.length) {
       alert('No data');
       return;
@@ -431,7 +534,7 @@ export default function ConvertCsvPage() {
             </div>
           </div>
         </div>
-        <button onClick={() => void generateCSV()} disabled={!processData.length || templatesLoading} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-sm font-medium shadow-sm transition flex items-center gap-2">
+        <button onClick={() => void generateCSV()} disabled={!processData.length || templatesLoading || errorCount > 0} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-sm font-medium shadow-sm transition flex items-center gap-2">
           <Download className="w-4 h-4" />
           <span>Download CSV</span>
         </button>
@@ -462,11 +565,11 @@ export default function ConvertCsvPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-10 gap-2 items-end">
-          {(['cat', 'task', 'qty', 'unit', 'cost', 'resp', 'start', 'end', 'status', 'costCode'] as const).map((key) => (
+        <div className="grid grid-cols-11 gap-2 items-end">
+          {(['cat', 'task', 'qty', 'unit', 'cost', 'resp', 'start', 'end', 'progress', 'status', 'costCode'] as const).map((key) => (
             <div key={key} className={`flex flex-col gap-1 ${key === 'task' ? 'col-span-2' : ''}`}>
               <label className={`text-[10px] font-bold uppercase ${key === 'start' || key === 'end' || key === 'status' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {key === 'cat' ? 'Category' : key === 'task' ? 'Task Name' : key === 'qty' ? 'Qty' : key === 'unit' ? 'Unit' : key === 'cost' ? 'Cost' : key === 'resp' ? 'Responsible' : key === 'start' ? 'Start (Man)' : key === 'end' ? 'End (Man)' : key === 'status' ? 'Status' : 'Cost Code'}
+                {key === 'cat' ? 'Category' : key === 'task' ? 'Task Name' : key === 'qty' ? 'Qty' : key === 'unit' ? 'Unit' : key === 'cost' ? 'Cost' : key === 'resp' ? 'Responsible' : key === 'start' ? 'Start (Man)' : key === 'end' ? 'End (Man)' : key === 'progress' ? 'Progress' : key === 'status' ? 'Status' : 'Cost Code'}
               </label>
               <select value={mappings[key]} onChange={(e) => updateMapping(key, e.target.value)} className={`w-full text-xs border border-slate-300 rounded h-7 px-1 ${key === 'start' || key === 'end' || key === 'status' ? 'text-slate-500 bg-slate-50' : ''}`}>
                 <option value="None">-- None --</option>
@@ -475,6 +578,24 @@ export default function ConvertCsvPage() {
             </div>
           ))}
         </div>
+
+        {processingIssues.length > 0 && (
+          <div className={`rounded border px-3 py-2 text-xs ${errorCount > 0 ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+            <div className="font-semibold mb-1">
+              Data Issues: {errorCount} error(s), {warningCount} warning(s)
+            </div>
+            <div className="max-h-24 overflow-auto space-y-1 pr-1">
+              {processingIssues.slice(0, 20).map((issue, idx) => (
+                <div key={`${issue.row}-${idx}`} className="font-mono">
+                  [{issue.level.toUpperCase()}] {issue.row === 'system' ? 'System' : `Row ${issue.row}`}: {issue.message}
+                </div>
+              ))}
+              {processingIssues.length > 20 && (
+                <div className="italic">...and {processingIssues.length - 20} more issue(s)</div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <main className="flex-1 bg-white overflow-hidden flex flex-col relative">
@@ -482,6 +603,9 @@ export default function ConvertCsvPage() {
           <h2 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Data Preview</h2>
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <span>Records: {processData.length}</span>
+            <span className={errorCount > 0 ? 'text-rose-600 font-semibold' : warningCount > 0 ? 'text-amber-600 font-semibold' : ''}>
+              Issues: {processingIssues.length}
+            </span>
             <div className="h-3 w-px bg-slate-300" />
             <span>{statusText}</span>
           </div>

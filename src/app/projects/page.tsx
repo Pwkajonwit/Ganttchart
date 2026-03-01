@@ -220,24 +220,24 @@ export default function ProjectsPage() {
     // Status config
     const getStatusConfig = (status: string) => {
         const configs: Record<string, { label: string; class: string; icon: React.ReactNode }> = {
-            'planning': { label: 'วางแผน', class: 'bg-gray-100 text-gray-700 border-gray-200', icon: <Clock className="w-3 h-3" /> },
-            'in-progress': { label: 'กำลังดำเนินการ', class: 'bg-blue-50 text-blue-700 border-blue-200', icon: <TrendingUp className="w-3 h-3" /> },
-            'completed': { label: 'เสร็จสิ้น', class: 'bg-green-50 text-green-700 border-green-200', icon: <CheckCircle2 className="w-3 h-3" /> },
-            'on-hold': { label: 'ระงับชั่วคราว', class: 'bg-amber-50 text-amber-700 border-amber-200', icon: <AlertCircle className="w-3 h-3" /> },
+            'planning': { label: 'วางแผน', class: 'bg-slate-100 text-slate-800 border-slate-300', icon: <Clock className="w-3 h-3" /> },
+            'in-progress': { label: 'กำลังดำเนินการ', class: 'bg-blue-100 text-blue-800 border-blue-300', icon: <TrendingUp className="w-3 h-3" /> },
+            'completed': { label: 'เสร็จสิ้น', class: 'bg-green-100 text-green-800 border-green-300', icon: <CheckCircle2 className="w-3 h-3" /> },
+            'on-hold': { label: 'ระงับชั่วคราว', class: 'bg-amber-100 text-amber-800 border-amber-300', icon: <AlertCircle className="w-3 h-3" /> },
         };
         return configs[status] || configs['planning'];
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 subpixel-antialiased [text-rendering:geometricPrecision]">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                         <FolderKanban className="w-6 h-6 text-blue-600" />
                         โครงการทั้งหมด
                     </h1>
-                    <p className="text-gray-600 text-sm mt-0.5">จัดการและติดตามโครงการก่อสร้าง</p>
+                    <p className="text-slate-700 text-sm mt-0.5">จัดการและติดตามโครงการก่อสร้าง</p>
                 </div>
 
                 {['admin', 'project_manager'].includes(user?.role || '') && (
@@ -253,41 +253,41 @@ export default function ProjectsPage() {
 
             {/* Quick Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="bg-white rounded-md border border-gray-300 p-4">
-                    <p className="text-gray-600 text-xs font-medium">โครงการทั้งหมด</p>
-                    <p className="text-2xl font-semibold text-gray-900 mt-1">{stats.total}</p>
+                <div className="bg-white rounded-md border border-slate-300 p-4 shadow-sm">
+                    <p className="text-slate-700 text-xs font-semibold">โครงการทั้งหมด</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1">{stats.total}</p>
                 </div>
-                <div className="bg-white rounded-md border border-gray-300 p-4">
-                    <p className="text-gray-600 text-xs font-medium">กำลังดำเนินการ</p>
-                    <p className="text-2xl font-semibold text-blue-600 mt-1">{stats.inProgress}</p>
+                <div className="bg-white rounded-md border border-slate-300 p-4 shadow-sm">
+                    <p className="text-slate-700 text-xs font-semibold">กำลังดำเนินการ</p>
+                    <p className="text-2xl font-bold text-blue-700 mt-1">{stats.inProgress}</p>
                 </div>
-                <div className="bg-white rounded-md border border-gray-300 p-4">
-                    <p className="text-gray-600 text-xs font-medium">เสร็จสิ้น</p>
-                    <p className="text-2xl font-semibold text-green-600 mt-1">{stats.completed}</p>
+                <div className="bg-white rounded-md border border-slate-300 p-4 shadow-sm">
+                    <p className="text-slate-700 text-xs font-semibold">เสร็จสิ้น</p>
+                    <p className="text-2xl font-bold text-green-700 mt-1">{stats.completed}</p>
                 </div>
-                <div className="bg-white rounded-md border border-gray-300 p-4">
-                    <p className="text-gray-600 text-xs font-medium">วางแผน</p>
-                    <p className="text-2xl font-semibold text-gray-600 mt-1">{stats.planning}</p>
+                <div className="bg-white rounded-md border border-slate-300 p-4 shadow-sm">
+                    <p className="text-slate-700 text-xs font-semibold">วางแผน</p>
+                    <p className="text-2xl font-bold text-slate-700 mt-1">{stats.planning}</p>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-md border border-gray-300 p-4 flex flex-col lg:flex-row gap-3">
+            <div className="bg-white rounded-md border border-slate-300 p-4 flex flex-col lg:flex-row gap-3 shadow-sm">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input
                         type="text"
                         placeholder="ค้นหาโครงการ..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors"
+                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-md text-sm text-slate-900 placeholder:text-slate-500 font-medium focus:border-slate-900 transition-colors"
                     />
                 </div>
 
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as StatusType)}
-                    className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:border-black transition-colors font-medium text-gray-700"
+                    className="px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:border-slate-900 transition-colors font-semibold text-slate-800"
                 >
                     <option value="active">⚡ ดำเนินการอยู่ (Active)</option>
                     <option value="all">ทั้งหมด (All)</option>
@@ -298,16 +298,16 @@ export default function ProjectsPage() {
                     <option value="completed">เสร็จสิ้น</option>
                 </select>
 
-                <div className="flex items-center bg-white border border-gray-300 rounded-md overflow-hidden">
+                <div className="flex items-center bg-white border border-slate-300 rounded-md overflow-hidden">
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`px-3 py-2 text-sm ${viewMode === 'grid' ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                        className={`px-3 py-2 text-sm ${viewMode === 'grid' ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
                     >
                         Grid
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`px-3 py-2 text-sm border-l border-gray-300 ${viewMode === 'list' ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                        className={`px-3 py-2 text-sm border-l border-slate-300 ${viewMode === 'list' ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
                     >
                         List
                     </button>
@@ -349,7 +349,7 @@ export default function ProjectsPage() {
                             return (
                                 <div
                                     key={project.id}
-                                    className="group relative bg-white rounded-lg border border-gray-200 transition-all duration-300 flex flex-col overflow-hidden"
+                                    className="group relative bg-white rounded-lg border border-slate-300 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden"
                                 >
                                     {/* Status Stripe (Left) */}
                                     <div className={`absolute left-0 top-0 bottom-0 w-1 transition-colors ${project.status === 'completed' ? 'bg-green-500' :
@@ -362,16 +362,16 @@ export default function ProjectsPage() {
                                         <div className="flex justify-between items-start mb-4">
                                             <div className="flex-1 min-w-0 pr-4">
                                                 <Link href={`/projects/${project.id}`} className="block">
-                                                    <h3 className="text-base font-bold text-gray-900 leading-tight truncate group-hover:text-blue-700 transition-colors" title={project.name}>
+                                                    <h3 className="text-base font-bold text-slate-900 leading-tight truncate group-hover:text-blue-700 transition-colors" title={project.name}>
                                                         {project.name}
                                                     </h3>
                                                 </Link>
                                                 <div className="flex items-center gap-2 mt-1">
-                                                    <Building2 className="w-3 h-3 text-gray-400" />
-                                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide truncate">{project.owner}</span>
+                                                    <Building2 className="w-3 h-3 text-slate-500" />
+                                                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide truncate">{project.owner}</span>
                                                 </div>
                                                 {project.code && (
-                                                    <p className="text-[11px] text-gray-500 mt-1 font-medium truncate">
+                                                    <p className="text-[11px] text-slate-600 mt-1 font-medium truncate">
                                                         เลขที่โครงการ: {project.code}
                                                     </p>
                                                 )}
@@ -390,7 +390,7 @@ export default function ProjectsPage() {
                                                                 e.preventDefault();
                                                                 setDeleteConfirm(deleteConfirm === project.id ? null : project.id);
                                                             }}
-                                                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                                            className="p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
                                                         >
                                                             <MoreVertical className="w-4 h-4" />
                                                         </button>
@@ -398,14 +398,14 @@ export default function ProjectsPage() {
 
                                                     {/* Dropdown Menu */}
                                                     {deleteConfirm === project.id && (
-                                                        <div className="absolute right-0 top-6 bg-white border border-gray-200 rounded shadow-lg py-1 z-20 w-32">
+                                                        <div className="absolute right-0 top-6 bg-white border border-slate-300 rounded shadow-lg py-1 z-20 w-32">
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.preventDefault();
                                                                     openEditModal(project);
                                                                     setDeleteConfirm(null);
                                                                 }}
-                                                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                                className="w-full px-3 py-2 text-left text-xs text-slate-800 hover:bg-slate-50 flex items-center gap-2"
                                                             >
                                                                 <Edit2 className="w-3 h-3" />
                                                                 แก้ไข
@@ -428,7 +428,7 @@ export default function ProjectsPage() {
 
                                         {/* Description (Optional - can be removed for more compactness, keeping for info) */}
                                         {project.description && (
-                                            <p className="text-xs text-gray-500 line-clamp-2 mb-4 h-8">
+                                            <p className="text-xs text-slate-600 line-clamp-2 mb-4 h-8">
                                                 {project.description}
                                             </p>
                                         )}
@@ -437,12 +437,12 @@ export default function ProjectsPage() {
                                         <div className="grid grid-cols-2 gap-4 mb-4 mt-auto">
                                             {/* Date Info */}
                                             <div>
-                                                <p className="text-xs text-gray-400 font-medium uppercase mb-1">Timeline</p>
-                                                <div className="flex items-center gap-1.5 text-xs text-gray-700 font-medium">
-                                                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                                <p className="text-xs text-slate-600 font-semibold uppercase mb-1">Timeline</p>
+                                                <div className="flex items-center gap-1.5 text-xs text-slate-800 font-semibold">
+                                                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
                                                     <span>{duration} Days</span>
                                                 </div>
-                                                <p className="text-xs text-gray-400 mt-0.5 truncate">
+                                                <p className="text-xs text-slate-600 mt-0.5 truncate">
                                                     {formatDate(project.startDate)} - {formatDate(project.endDate)}
                                                 </p>
                                             </div>
@@ -450,10 +450,10 @@ export default function ProjectsPage() {
                                             {/* Progress Info */}
                                             <div className="flex flex-col justify-end">
                                                 <div className="flex justify-between items-end mb-1">
-                                                    <span className="text-xs text-gray-400 font-medium uppercase">Progress</span>
-                                                    <span className={`text-xs font-bold ${project.overallProgress >= 100 ? 'text-green-600' : 'text-gray-900'}`}>{project.overallProgress}%</span>
+                                                    <span className="text-xs text-slate-600 font-semibold uppercase">Progress</span>
+                                                    <span className={`text-xs font-bold ${project.overallProgress >= 100 ? 'text-green-700' : 'text-slate-900'}`}>{project.overallProgress}%</span>
                                                 </div>
-                                                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
                                                     <div
                                                         className={`h-full rounded-full transition-all duration-1000 ${project.overallProgress >= 100 ? 'bg-green-500' :
                                                             project.overallProgress >= 50 ? 'bg-blue-600' : 'bg-gray-700'
@@ -465,7 +465,7 @@ export default function ProjectsPage() {
                                         </div>
 
                                         {/* Divider */}
-                                        <div className="h-px bg-gray-100 mb-3" />
+                                        <div className="h-px bg-slate-200 mb-3" />
 
                                         {/* Action Grid - Clean Business Style */}
                                         <div className="grid grid-cols-5 gap-2">
@@ -525,20 +525,20 @@ export default function ProjectsPage() {
                     </div>
                 ) : (
                     /* Projects List View */
-                    <div className="bg-white rounded-md border border-gray-300 overflow-hidden">
+                    <div className="bg-white rounded-md border border-slate-300 overflow-hidden shadow-sm">
                         <table className="w-full">
-                            <thead className="bg-gray-50 border-b border-gray-200">
+                            <thead className="bg-slate-100 border-b border-slate-300">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">โครงการ</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">เลขที่โครงการ</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">เจ้าของ</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Progress</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">สถานะ</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">เครื่องมือ</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">จัดการ</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">โครงการ</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">เลขที่โครงการ</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">เจ้าของ</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase">Progress</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase">สถานะ</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase">เครื่องมือ</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase">จัดการ</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-slate-200">
                                 {filteredProjects.map((project) => {
                                     const statusConfig = getStatusConfig(project.status);
                                     const isCompleted = project.status === 'completed';
@@ -551,27 +551,27 @@ export default function ProjectsPage() {
                                                 transition-colors
                                                 ${isCompleted ? 'bg-green-50/10 hover:bg-green-50/30' :
                                                     isOnHold ? 'bg-amber-50/10 hover:bg-amber-50/30 opacity-90' :
-                                                        'hover:bg-gray-50'}
+                                                        'hover:bg-slate-50'}
                                             `}
                                         >
                                             <td className="px-4 py-3">
                                                 <Link href={`/projects/${project.id}`} className="block group">
-                                                    <p className={`text-sm font-medium transition-colors ${isCompleted ? 'text-green-900' : 'text-gray-900 group-hover:text-blue-600'}`}>
+                                                    <p className={`text-sm font-semibold transition-colors ${isCompleted ? 'text-green-900' : 'text-slate-900 group-hover:text-blue-700'}`}>
                                                         {project.name}
                                                     </p>
-                                                    <p className="text-xs text-gray-500">
+                                                    <p className="text-xs text-slate-600">
                                                         {formatDate(project.startDate)} → {formatDate(project.endDate)}
                                                         <span className="ml-2">({Math.max(0, differenceInDays(parseISO(project.endDate), parseISO(project.startDate)) + 1)} วัน)</span>
                                                     </p>
                                                 </Link>
                                             </td>
-                                            <td className="px-4 py-3 text-sm text-gray-700 font-medium">
+                                            <td className="px-4 py-3 text-sm text-slate-800 font-semibold">
                                                 {project.code || '-'}
                                             </td>
-                                            <td className="px-4 py-3 text-sm text-gray-700">{project.owner}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-800">{project.owner}</td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-2 justify-center">
-                                                    <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                    <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                                                         <div
                                                             className={`h-full rounded-full ${project.overallProgress === 100 ? 'bg-green-500' :
                                                                 project.overallProgress >= 50 ? 'bg-blue-500' :
@@ -580,7 +580,7 @@ export default function ProjectsPage() {
                                                             style={{ width: `${project.overallProgress}%` }}
                                                         />
                                                     </div>
-                                                    <span className="text-sm font-medium text-gray-700">{project.overallProgress}%</span>
+                                                    <span className="text-sm font-semibold text-slate-800">{project.overallProgress}%</span>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-center">
@@ -639,14 +639,14 @@ export default function ProjectsPage() {
                                                         <>
                                                             <button
                                                                 onClick={() => openEditModal(project)}
-                                                                className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-blue-600 transition-colors"
+                                                                className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition-colors"
                                                                 title="แก้ไข"
                                                             >
                                                                 <Edit2 className="w-4 h-4" />
                                                             </button>
                                                             <button
                                                                 onClick={() => handleDeleteClick(project)}
-                                                                className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-red-600 transition-colors"
+                                                                className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-red-700 transition-colors"
                                                                 title="ลบ"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
