@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import GanttChart from '@/components/charts/gantt/GanttChart';
-import { Calendar, Loader2, FolderKanban, Plus, TrendingUp, Layout, ChevronDown, Layers, ArrowLeft, Target } from 'lucide-react';
+import { Calendar, Loader2, FolderKanban, Plus, TrendingUp, Layout, ChevronDown, Layers, ArrowLeft, Target, Share2, Lock, Key } from 'lucide-react';
 import Link from 'next/link';
 import { Project, Task, Employee } from '@/types/construction';
 import { getProjects, getTasks, updateTask, createTask, getEmployees } from '@/lib/firestore';
@@ -42,6 +42,9 @@ export default function GanttClient({
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [chartViewMode, setChartViewMode] = useState<ViewMode>('day');
 
+    const readonlyParam = searchParams.get('readonly') === 'true';
+    const isReadOnly = readonlyParam || !canEdit;
+
     // UI State for Dropdowns
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const viewMenuRef = React.useRef<HTMLDivElement>(null);
@@ -51,6 +54,14 @@ export default function GanttClient({
     const [progressModalTask, setProgressModalTask] = useState<Task | undefined>(undefined);
     const [updatingTaskIds, setUpdatingTaskIds] = useState<Set<string>>(new Set());
     const [isApplyingOffsets, setIsApplyingOffsets] = useState(false);
+
+    // Share link PIN states
+    const encodedPin = searchParams.get('p');
+    const [isPinVerified, setIsPinVerified] = useState(!encodedPin);
+    const [enteredPin, setEnteredPin] = useState('');
+    const [pinError, setPinError] = useState('');
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [sharePin, setSharePin] = useState('');
 
     const [procurementOffsets, setProcurementOffsets] = useState<{
         dueProcurementDays: number;
@@ -393,12 +404,77 @@ export default function GanttClient({
         }
     };
 
+    const handleShareClick = () => {
+        setShowShareModal(true);
+    };
+
+    const copyShareLink = () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('readonly', 'true');
+        if (sharePin) {
+            url.searchParams.set('p', btoa(sharePin));
+        }
+        navigator.clipboard.writeText(url.toString());
+        setShowShareModal(false);
+        setSharePin('');
+        alert('คัดลอกลิงก์สำหรับแชร์เรียบร้อยแล้ว!');
+    };
+
+    const handleVerifyPin = (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            if (btoa(enteredPin) === encodedPin) {
+                setIsPinVerified(true);
+                setPinError('');
+            } else {
+                setPinError('รหัส PIN ไม่ถูกต้อง');
+                setEnteredPin('');
+            }
+        } catch {
+            setPinError('Invalid PIN format');
+        }
+    };
+
 
     if (loading) {
         return (
             <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                 <span className="ml-2 text-gray-500">Loading data...</span>
+            </div>
+        );
+    }
+
+    if (!isPinVerified) {
+        return (
+            <div className="min-h-[80vh] flex items-center justify-center">
+                <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100 max-w-sm w-full text-center">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Lock className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">ใส่รหัส PIN เพื่อเข้าดู</h2>
+                    <p className="text-sm text-gray-500 mb-6">กรุณาระบุรหัส PIN 6 หลักที่ได้รับจากผู้แชร์โครงการ</p>
+
+                    <form onSubmit={handleVerifyPin}>
+                        <input
+                            type="password"
+                            maxLength={6}
+                            value={enteredPin}
+                            onChange={(e) => setEnteredPin(e.target.value)}
+                            placeholder="******"
+                            className="w-full text-center tracking-[0.5em] text-2xl font-bold py-3 px-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-2"
+                        />
+                        {pinError && <p className="text-red-500 text-sm mb-4">{pinError}</p>}
+                        {!pinError && <div className="h-6"></div>}
+
+                        <button
+                            type="submit"
+                            className="w-full bg-blue-600 text-white font-medium py-3 rounded-xl hover:bg-blue-700 transition-colors"
+                        >
+                            ยืนยันรหัส PIN
+                        </button>
+                    </form>
+                </div>
             </div>
         );
     }
@@ -507,7 +583,17 @@ export default function GanttClient({
                             )}
                         </div>
 
-                        {canEdit && (
+                        {/* Share Button */}
+                        <button
+                            onClick={handleShareClick}
+                            className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-sm hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                            title="Copy View-Only Link"
+                        >
+                            <Share2 className="w-4 h-4 text-blue-600" />
+                            Share Link
+                        </button>
+
+                        {!isReadOnly && (
                             <>
                                 <button
                                     type="button"
@@ -541,15 +627,16 @@ export default function GanttClient({
                     allowedViewModes={windowMode === '4w' ? ['day'] : ['day', 'week', 'month']}
                     isFourWeekView={windowMode === '4w'}
                     isProcurementMode={isProcurementPage}
-                    onTaskUpdate={handleTaskUpdate}
-                    onOpenProgressModal={openProgressModal}
-                    onAddSubTask={handleAddSubTask}
-                    onAddTaskToCategory={handleAddTaskToCategory}
+                    onTaskUpdate={isReadOnly ? undefined : handleTaskUpdate}
+                    onOpenProgressModal={isReadOnly ? undefined : openProgressModal}
+                    onAddSubTask={isReadOnly ? undefined : handleAddSubTask}
+                    onAddTaskToCategory={isReadOnly ? undefined : handleAddTaskToCategory}
                     updatingTaskIds={updatingTaskIds}
                     procurementOffsets={procurementOffsets}
                     onProcurementOffsetsChange={setProcurementOffsets}
-                    onApplyProcurementOffsetsToAll={handleApplyProcurementOffsetsToAll}
+                    onApplyProcurementOffsetsToAll={isReadOnly ? undefined : handleApplyProcurementOffsetsToAll}
                     isApplyingOffsets={isApplyingOffsets}
+                    forceExpanded={isReadOnly}
                 />
             )}
 
@@ -571,6 +658,51 @@ export default function GanttClient({
                 task={progressModalTask}
                 onUpdate={handleProgressUpdate}
             />
+
+            {/* Share PIN Modal */}
+            {showShareModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-4 text-blue-600">
+                            <Key className="w-6 h-6" />
+                            <h3 className="text-lg font-bold text-gray-900">สร้างลิงก์แชร์โครงการ</h3>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-6">
+                            คุณสามารถตั้งรหัส PIN 6 หลักเพื่อเพิ่มความปลอดภัยให้กับการเข้าถึงข้อมูล หรือเว้นว่างไว้หากต้องการให้ใครก็เข้าดูได้
+                        </p>
+
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">รหัส PIN 6 หลัก (ไม่บังคับ)</label>
+                            <input
+                                type="text"
+                                maxLength={6}
+                                value={sharePin}
+                                onChange={(e) => setSharePin(e.target.value.replace(/[^0-9]/g, ''))}
+                                placeholder="เช่น 123456"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono tracking-widest text-center text-lg"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => {
+                                    setShowShareModal(false);
+                                    setSharePin('');
+                                }}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                ยกเลิก
+                            </button>
+                            <button
+                                onClick={copyShareLink}
+                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                            >
+                                คัดลอกลิงก์
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

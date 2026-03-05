@@ -429,12 +429,12 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                     </div>
 
                     {visibleColumns.cost && (
-                        <div className="w-20 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
+                        <div className="w-[100px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
                             {isGroup ? (displayCost ? displayCost.toLocaleString() : '-') : (t.cost ? t.cost.toLocaleString() : '-')}
                         </div>
                     )}
                     {visibleColumns.weight && (
-                        <div className="w-16 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
+                        <div className="w-[70px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pr-2 truncate">
                             {(() => {
                                 if (t.type === 'group') {
                                     // Recursive sum for groups
@@ -450,7 +450,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                         </div>
                     )}
                     {visibleColumns.quantity && (
-                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pl-2 truncate">
+                        <div className="w-[100px] h-full flex items-center justify-start border-l border-gray-300/70 text-xs text-gray-600 font-medium font-mono shrink-0 pl-2 truncate">
                             {isGroup ? (groupSummary?.count ? `${groupSummary.count} items` : '-') : (t.quantity || '-')}
                         </div>
                     )}

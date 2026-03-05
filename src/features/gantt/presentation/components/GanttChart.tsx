@@ -50,6 +50,7 @@ interface GanttChartProps {
     }) => void;
     onApplyProcurementOffsetsToAll?: () => Promise<void>;
     isApplyingOffsets?: boolean;
+    forceExpanded?: boolean;
 }
 
 export default function GanttChart({
@@ -76,7 +77,8 @@ export default function GanttChart({
     procurementOffsets = { dueProcurementDays: -14, dueMaterialOnSiteDays: -7, dateOfUseOffsetDays: 0 },
     onProcurementOffsetsChange,
     onApplyProcurementOffsetsToAll,
-    isApplyingOffsets = false
+    isApplyingOffsets = false,
+    forceExpanded = false
 }: GanttChartProps) {
 
     // Optimistic State
@@ -142,7 +144,13 @@ export default function GanttChart({
     const [collapsedSubcategories, setCollapsedSubcategories] = useState<Set<string>>(new Set());
     const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
     const [showDependencies, setShowDependencies] = useState(false);
-    const [isExpanded, setIsExpanded] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(forceExpanded);
+
+    useEffect(() => {
+        if (forceExpanded) {
+            setIsExpanded(true);
+        }
+    }, [forceExpanded]);
 
     // Column Visibility
     const defaultVisibleColumns: VisibleColumns = {
@@ -182,6 +190,22 @@ export default function GanttChart({
             localStorage.setItem(visibleColumnsStorageKey, JSON.stringify(visibleColumns));
         }
     }, [visibleColumns, visibleColumnsStorageKey]);
+
+    // Name Column Resizing
+    const nameColumnWidthStorageKey = 'gantt_nameColumnWidth_v1';
+    const [nameColumnWidth, setNameColumnWidth] = useState<number>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(nameColumnWidthStorageKey);
+            return saved ? parseInt(saved, 10) : 280;
+        }
+        return 280;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(nameColumnWidthStorageKey, nameColumnWidth.toString());
+        }
+    }, [nameColumnWidth]);
 
     // Row Drag & Drop State
     const [rowDragState, setRowDragState] = useState<RowDragState | null>(null);
@@ -238,7 +262,7 @@ export default function GanttChart({
         document.body.classList.add('gantt-fullscreen');
         document.body.style.overflow = 'hidden';
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
+            if (event.key === 'Escape' && !forceExpanded) {
                 setIsExpanded(false);
             }
         };
@@ -643,10 +667,10 @@ export default function GanttChart({
     const offsetY = startIndex * ROW_HEIGHT;
 
     const stickyWidth = useMemo(() => {
-        let w = 280; // Adjusted base width for Name
-        if (visibleColumns.cost) w += 80;
-        if (visibleColumns.weight) w += 64; // w-16
-        if (visibleColumns.quantity) w += 80; // w-20
+        let w = nameColumnWidth; // Adjusted base width for Name
+        if (visibleColumns.cost) w += 100;
+        if (visibleColumns.weight) w += 70; // w-[70px]
+        if (visibleColumns.quantity) w += 100; // w-[100px]
         if (isProcurementMode && visibleColumns.dueProcurement) w += 78;
         if (isProcurementMode && visibleColumns.dueMaterialOnSite) w += 78;
         if (isProcurementMode && visibleColumns.dateOfUse) w += 78;
@@ -658,7 +682,7 @@ export default function GanttChart({
         if (visibleColumns.team) w += EMPLOYEE_COL_WIDTH;
         if (visibleColumns.progress) w += 80;
         return w + 30; // buffer
-    }, [visibleColumns, EMPLOYEE_COL_WIDTH, isProcurementMode]);
+    }, [visibleColumns, EMPLOYEE_COL_WIDTH, isProcurementMode, nameColumnWidth]);
 
     // PDF Export
     const { containerRef: chartContainerRef, exportToPdf } = usePdfExport({
@@ -1028,7 +1052,7 @@ export default function GanttChart({
                 customDate={customDate}
                 onCustomDateChange={setCustomDate}
                 isExpanded={isExpanded}
-                onToggleExpand={() => setIsExpanded(prev => !prev)}
+                onToggleExpand={forceExpanded ? undefined : () => setIsExpanded(prev => !prev)}
                 isProcurementMode={isProcurementMode}
                 procurementOffsets={procurementOffsets}
                 onProcurementOffsetsChange={onProcurementOffsetsChange}
@@ -1083,6 +1107,8 @@ export default function GanttChart({
                             employeeColumnWidth={EMPLOYEE_COL_WIDTH}
                             isFourWeekView={isFourWeekView}
                             isProcurementMode={isProcurementMode}
+                            nameColumnWidth={nameColumnWidth}
+                            onNameColumnWidthChange={setNameColumnWidth}
                         />
 
                         <div className="relative">
@@ -1152,17 +1178,17 @@ export default function GanttChart({
 
                                                 {/* Columns */}
                                                 {visibleColumns.cost && (
-                                                    <div className="w-20 h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
+                                                    <div className="w-[100px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
                                                         {displayCost.toLocaleString()}
                                                     </div>
                                                 )}
                                                 {visibleColumns.weight && (
-                                                    <div className="w-16 h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
+                                                    <div className="w-[70px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
                                                         100%
                                                     </div>
                                                 )}
                                                 {visibleColumns.quantity && (
-                                                    <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate">
+                                                    <div className="w-[100px] h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate">
                                                         -
                                                     </div>
                                                 )}
@@ -1369,9 +1395,9 @@ export default function GanttChart({
                                                                 </div>
 
                                                                 {/* Subcategory Summary Cols */}
-                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subSummary.totalCost || 0).toLocaleString()}</div>}
-                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subSummary.totalWeight || 0).toFixed(2)}%</div>}
-                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-20 shrink-0 text-left pl-2 truncate"></div>}
+                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-[100px] shrink-0 pr-2 truncate">{(subSummary.totalCost || 0).toLocaleString()}</div>}
+                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-[70px] shrink-0 pr-2 truncate">{(subSummary.totalWeight || 0).toFixed(2)}%</div>}
+                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[100px] shrink-0 text-left pl-2 truncate"></div>}
                                                                 {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
                                                                 {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
                                                                 {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
@@ -1522,9 +1548,9 @@ export default function GanttChart({
                                                                     )}
                                                                 </div>
 
-                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-20 shrink-0 pr-2 truncate">{(subsubSummary.totalCost || 0).toLocaleString()}</div>}
-                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-16 shrink-0 pr-2 truncate">{(subsubSummary.totalWeight || 0).toFixed(2)}%</div>}
-                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-20 shrink-0 text-left pl-2 truncate"></div>}
+                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-[100px] shrink-0 pr-2 truncate">{(subsubSummary.totalCost || 0).toLocaleString()}</div>}
+                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-[70px] shrink-0 pr-2 truncate">{(subsubSummary.totalWeight || 0).toFixed(2)}%</div>}
+                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[100px] shrink-0 text-left pl-2 truncate"></div>}
                                                                 {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
                                                                 {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
                                                                 {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}

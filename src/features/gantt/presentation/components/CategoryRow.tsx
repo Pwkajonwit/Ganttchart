@@ -153,17 +153,17 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
 
                     {/* Columns */}
                     {visibleColumns.cost && (
-                        <div className="w-20 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
+                        <div className="w-[100px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
                             {categorySummary.totalCost.toLocaleString()}
                         </div>
                     )}
                     {visibleColumns.weight && (
-                        <div className="w-16 h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
+                        <div className="w-[70px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs text-gray-900 font-bold font-mono shrink-0 pr-2 truncate">
                             {categorySummary.totalWeight.toFixed(2)}%
                         </div>
                     )}
                     {visibleColumns.quantity && (
-                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate"></div>
+                        <div className="w-[100px] h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate"></div>
                     )}
                     {isProcurementMode && visibleColumns.dueProcurement && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
                     {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}

@@ -15,7 +15,9 @@ import {
     Calendar,
     Users,
     Maximize2,
-    Minimize2
+    Minimize2,
+    PanelRightClose,
+    PanelRightOpen
 } from 'lucide-react';
 import { ViewMode, DateRange, VisibleColumns } from './types';
 
@@ -384,7 +386,7 @@ export default function GanttToolbar({
                             title={Object.values(visibleColumns).some(v => v) ? 'Hide all columns' : 'Show all columns'}
                             className={`p-2 rounded-md transition-all ${Object.values(visibleColumns).every(v => !v) ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
                         >
-                            {Object.values(visibleColumns).some(v => v) ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                            {Object.values(visibleColumns).some(v => v) ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
                         </button>
                     )}
 

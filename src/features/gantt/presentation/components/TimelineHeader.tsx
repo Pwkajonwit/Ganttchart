@@ -20,6 +20,8 @@ interface TimelineHeaderProps {
     employeeColumnWidth?: number;
     isFourWeekView?: boolean;
     isProcurementMode?: boolean;
+    nameColumnWidth?: number;
+    onNameColumnWidthChange?: (width: number) => void;
 }
 
 export default function TimelineHeader({
@@ -32,10 +34,32 @@ export default function TimelineHeader({
     hideSidebar = false,
     employeeColumnWidth = 92,
     isFourWeekView = false,
-    isProcurementMode = false
+    isProcurementMode = false,
+    nameColumnWidth = 280,
+    onNameColumnWidthChange
 }: TimelineHeaderProps) {
     const commonHeaderClass = 'text-xs font-semibold text-gray-700 h-full border-l border-gray-200 bg-gray-50/80 flex items-center';
     const timelineWidth = timeline.items.length * config.cellWidth;
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (!onNameColumnWidthChange) return;
+        e.preventDefault();
+        const startX = e.pageX;
+        const startWidth = nameColumnWidth;
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const newWidth = Math.max(150, Math.min(800, startWidth + (moveEvent.pageX - startX)));
+            onNameColumnWidthChange(newWidth);
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
 
     return (
         <div className="sticky top-0 z-[60] flex bg-white border-b border-gray-200 shadow-sm h-12">
@@ -44,12 +68,24 @@ export default function TimelineHeader({
                     className="sticky left-0 z-[70] bg-white border-r border-gray-200 flex items-center h-full"
                     style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}
                 >
-                    <div className="flex-1 px-4 text-xs font-bold text-gray-900 truncate">Project List</div>
+                    <div className="flex-1 relative flex items-center h-full px-4 text-xs font-bold text-gray-900 truncate group/header">
+                        <span className="truncate flex-1">Project List</span>
+                        {onNameColumnWidthChange && (
+                            <div
+                                className="absolute right-0 top-0 w-2 h-full cursor-col-resize z-20 flex items-center justify-center opacity-0 group-hover/header:opacity-100 hover:bg-blue-400/20"
+                                style={{ right: '-1px' }}
+                                onMouseDown={handleMouseDown}
+                                title="Drag to resize"
+                            >
+                                <div className="w-[2px] h-4 bg-gray-400 group-hover/header:bg-blue-500 rounded"></div>
+                            </div>
+                        )}
+                    </div>
                     {visibleColumns && (
                         <div className="flex items-center h-full">
-                            {visibleColumns.cost && <div className={`w-20 justify-end px-2 ${commonHeaderClass}`}>Budget</div>}
-                            {visibleColumns.weight && <div className={`w-16 justify-end px-2 ${commonHeaderClass}`}>Weight</div>}
-                            {visibleColumns.quantity && <div className={`w-20 justify-start pl-2 ${commonHeaderClass}`}>Quantity</div>}
+                            {visibleColumns.cost && <div className={`w-[100px] justify-end px-2 ${commonHeaderClass}`}>Budget</div>}
+                            {visibleColumns.weight && <div className={`w-[70px] justify-end px-2 ${commonHeaderClass}`}>Weight</div>}
+                            {visibleColumns.quantity && <div className={`w-[100px] justify-start pl-2 ${commonHeaderClass}`}>Quantity</div>}
                             {isProcurementMode && visibleColumns.dueProcurement && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>Due Proc.</div>}
                             {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>On Site</div>}
                             {isProcurementMode && visibleColumns.dateOfUse && <div className={`w-[78px] justify-start pl-2 ${commonHeaderClass}`}>Use Date</div>}
