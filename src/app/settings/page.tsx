@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { isSameWeek, subWeeks, parseISO } from 'date-fns';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     Settings,
     User,
@@ -142,6 +142,7 @@ const mergeSettingsWithDefault = (stored: Partial<UserSettings>): UserSettings =
 
 export default function SettingsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user, refreshUser, logout } = useAuth();
     const [activeTab, setActiveTab] = useState<TabType>('profile');
     const [settings, setSettings] = useState<UserSettings>(defaultSettings);
@@ -177,7 +178,7 @@ export default function SettingsPage() {
     const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
     const [editingMember, setEditingMember] = useState<Member | null>(null);
-    const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', role: 'viewer' as Member['role'] });
+    const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', password: '', role: 'viewer' as Member['role'] });
     const [savingMember, setSavingMember] = useState(false);
 
     const fetchStats = useCallback(async () => {
@@ -966,11 +967,53 @@ export default function SettingsPage() {
     };
 
     const handleAddMember = async () => {
-        if (!memberForm.name || !memberForm.email) {
+        const normalizedEmail = memberForm.email.trim().toLowerCase();
+        const trimmedPassword = memberForm.password.trim();
+
+        if (!memberForm.name.trim() || !normalizedEmail) {
             setAlertDialog({
                 isOpen: true,
-                title: 'ข้อผิดพลาด',
-                message: 'กรุณากรอกชื่อและอีเมล',
+                title: 'Error',
+                message: 'Please provide both name and email',
+                type: 'error',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
+
+        if (!editingMember && !trimmedPassword) {
+            setAlertDialog({
+                isOpen: true,
+                title: 'Error',
+                message: 'Please provide password for new user',
+                type: 'error',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
+
+        if (trimmedPassword && trimmedPassword.length < 6) {
+            setAlertDialog({
+                isOpen: true,
+                title: 'Error',
+                message: 'Password must be at least 6 characters.',
+                type: 'error',
+                onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
+
+        const duplicatedEmail = members.find((m) => {
+            const memberEmail = String(m.email || '').trim().toLowerCase();
+            if (editingMember && m.id === editingMember.id) return false;
+            return memberEmail === normalizedEmail;
+        });
+
+        if (duplicatedEmail) {
+            setAlertDialog({
+                isOpen: true,
+                title: 'Error',
+                message: 'This email is already in use.',
                 type: 'error',
                 onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
             });
@@ -980,12 +1023,18 @@ export default function SettingsPage() {
         setSavingMember(true);
         try {
             if (editingMember) {
-                await updateMember(editingMember.id, {
-                    name: memberForm.name,
-                    email: memberForm.email,
-                    phone: memberForm.phone,
+                const updatePayload: Partial<Member> = {
+                    name: memberForm.name.trim(),
+                    email: normalizedEmail,
+                    phone: memberForm.phone.trim(),
                     role: memberForm.role
-                });
+                };
+
+                if (trimmedPassword) {
+                    updatePayload.password = trimmedPassword;
+                }
+
+                await updateMember(editingMember.id, updatePayload);
 
                 // If updating self, refresh session to update permissions
                 if (user && editingMember.id === user.id) {
@@ -993,9 +1042,10 @@ export default function SettingsPage() {
                 }
             } else {
                 await createMember({
-                    name: memberForm.name,
-                    email: memberForm.email,
-                    phone: memberForm.phone,
+                    name: memberForm.name.trim(),
+                    email: normalizedEmail,
+                    phone: memberForm.phone.trim(),
+                    password: trimmedPassword,
                     role: memberForm.role
                 });
             }
@@ -1003,14 +1053,13 @@ export default function SettingsPage() {
             await fetchMembers();
             setIsMemberModalOpen(false);
             setEditingMember(null);
-            setMemberForm({ name: '', email: '', phone: '', role: 'viewer' });
-            setMemberForm({ name: '', email: '', phone: '', role: 'viewer' });
+            setMemberForm({ name: '', email: '', phone: '', password: '', role: 'viewer' });
         } catch (error) {
             console.error('Error saving member:', error);
             setAlertDialog({
                 isOpen: true,
-                title: 'ข้อผิดพลาด',
-                message: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล',
+                title: 'Error',
+                message: 'Failed to save member',
                 type: 'error',
                 onConfirm: () => setAlertDialog(prev => ({ ...prev, isOpen: false }))
             });
@@ -1021,10 +1070,9 @@ export default function SettingsPage() {
 
     const handleEditMember = (member: Member) => {
         setEditingMember(member);
-        setMemberForm({ name: member.name, email: member.email, phone: member.phone || '', role: member.role });
+        setMemberForm({ name: member.name, email: member.email, phone: member.phone || '', password: '', role: member.role });
         setIsMemberModalOpen(true);
     };
-
     const handleRemoveMember = async (id: string) => {
         setAlertDialog({
             isOpen: true,
@@ -1066,7 +1114,6 @@ export default function SettingsPage() {
         { id: 'profile', label: 'โปรไฟล์', icon: User, roles: ['admin', 'project_manager', 'engineer', 'viewer'] },
         { id: 'notifications', label: 'การแจ้งเตือน', icon: Bell, roles: ['admin', 'project_manager', 'engineer', 'viewer'] },
         { id: 'company', label: 'บริษัท', icon: Building2, roles: ['admin'] },
-        { id: 'members', label: 'สมาชิก', icon: Users, roles: ['admin'] },
         { id: 'system', label: 'ระบบ', icon: Database, roles: ['admin'] },
     ];
 
@@ -1525,7 +1572,7 @@ export default function SettingsPage() {
                                 <button
                                     onClick={() => {
                                         setEditingMember(null);
-                                        setMemberForm({ name: '', email: '', phone: '', role: 'viewer' });
+                                        setMemberForm({ name: '', email: '', phone: '', password: '', role: 'viewer' });
                                         setIsMemberModalOpen(true);
                                     }}
                                     className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-sm hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -1546,6 +1593,9 @@ export default function SettingsPage() {
                                             <div>
                                                 <p className="font-medium text-gray-900">{member.name}</p>
                                                 <p className="text-sm text-gray-500">{member.email}</p>
+                                                <p className={`text-xs mt-0.5 ${member.password ? 'text-green-600' : 'text-amber-600'}`}>
+                                                    {member.password ? 'Password set' : 'No password'}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">
@@ -1614,6 +1664,18 @@ export default function SettingsPage() {
                                             value={memberForm.email}
                                             onChange={(e) => setMemberForm({ ...memberForm, email: e.target.value })}
                                             placeholder="example@company.com"
+                                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                            {editingMember ? 'Password (leave blank to keep current)' : 'Password *'}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={memberForm.password}
+                                            onChange={(e) => setMemberForm({ ...memberForm, password: e.target.value })}
+                                            placeholder={editingMember ? 'Enter only when changing password' : 'Set password for this user'}
                                             className="w-full px-3 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:border-black"
                                         />
                                     </div>
@@ -1718,3 +1780,5 @@ export default function SettingsPage() {
         </div >
     );
 }
+
+

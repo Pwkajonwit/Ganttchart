@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
     LayoutDashboard,
+    User,
     ListTodo,
     BarChart3,
     CalendarDays,
@@ -32,7 +33,7 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-    { name: 'Dashboard', nameTh: 'ภาพรวม', href: '/', icon: LayoutDashboard },
+    { name: 'Dashboard', nameTh: 'Overview', href: '/', icon: LayoutDashboard },
     { name: 'Projects', nameTh: 'โครงการ', href: '/projects', icon: FolderKanban },
     { name: 'Tasks', nameTh: 'จัดการงาน', href: '/tasks', icon: ListTodo },
     { name: 'Procurement', nameTh: 'แจ้งเตือนจัดซื้อ', href: '/procurement', icon: BarChart3 },
@@ -41,6 +42,7 @@ const navigation: NavItem[] = [
     { name: 'Reports', nameTh: 'รายงาน', href: '/reports', icon: FileSpreadsheet },
     { name: 'Convert CSV', nameTh: 'แปลงไฟล์ CSV', href: '/convert-csv', icon: CalendarDays },
     { name: 'Notifications', nameTh: 'ทดสอบแจ้งเตือน', href: '/notifications', icon: Bell },
+    { name: 'User Management', nameTh: 'Member Access', href: '/members', icon: User },
     { name: 'Settings', nameTh: 'ตั้งค่า', href: '/settings', icon: Settings },
 ];
 
@@ -219,3 +221,4 @@ export default function Sidebar() {
         </>
     );
 }
+
