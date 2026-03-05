@@ -926,8 +926,13 @@ export async function getMember(memberId: string): Promise<Member | null> {
 
 export async function createMember(member: Omit<Member, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const membersRef = collection(db, 'members');
+    const normalizedEmail = String(member.email || '').trim().toLowerCase();
+    const cleanedPassword = member.password ? String(member.password).trim() : undefined;
+
     const docRef = await addDoc(membersRef, {
         ...member,
+        email: normalizedEmail,
+        password: cleanedPassword,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
     });
@@ -936,8 +941,17 @@ export async function createMember(member: Omit<Member, 'id' | 'createdAt' | 'up
 
 export async function updateMember(memberId: string, data: Partial<Member>): Promise<void> {
     const docRef = doc(db, 'members', memberId);
+    const payload: Partial<Member> = { ...data };
+
+    if (typeof payload.email === 'string') {
+        payload.email = payload.email.trim().toLowerCase();
+    }
+    if (typeof payload.password === 'string') {
+        payload.password = payload.password.trim();
+    }
+
     await updateDoc(docRef, {
-        ...data,
+        ...removeUndefined(payload),
         updatedAt: serverTimestamp()
     });
 }
@@ -1004,9 +1018,9 @@ export async function seedMembers(): Promise<void> {
     }
 
     const defaultMembers = [
-        { name: 'Admin User', email: 'admin@company.com', phone: '081-234-5678', role: 'admin' as const },
-        { name: 'สมชาย ใจดี', email: 'somchai@company.com', phone: '082-345-6789', role: 'project_manager' as const },
-        { name: 'สมหญิง รักงาน', email: 'somying@company.com', phone: '083-456-7890', role: 'engineer' as const },
+        { name: 'Admin User', email: 'admin@company.com', password: 'admin123', phone: '081-234-5678', role: 'admin' as const },
+        { name: 'สมชาย ใจดี', email: 'somchai@company.com', password: 'somchai123', phone: '082-345-6789', role: 'project_manager' as const },
+        { name: 'สมหญิง รักงาน', email: 'somying@company.com', password: 'somying123', phone: '083-456-7890', role: 'engineer' as const },
     ];
 
     for (const member of defaultMembers) {
@@ -1130,3 +1144,4 @@ export async function deleteExpense(expenseId: string): Promise<void> {
     const docRef = doc(db, 'expenses', expenseId);
     await deleteDoc(docRef);
 }
+

@@ -2,12 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Member } from '@/types/construction';
-import { getMembers } from '@/lib/firestore';
+import { createMember, getMembers } from '@/lib/firestore';
 
 interface AuthContextType {
     user: Member | null;
     loading: boolean;
-    login: (email: string) => Promise<{ success: boolean; message: string }>;
+    login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+    register: (name: string, email: string, password: string, role: Member['role']) => Promise<{ success: boolean; message: string }>;
     logout: () => void;
     refreshUser: () => Promise<void>;
     isAuthenticated: boolean;
@@ -15,17 +16,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const sanitizeMember = (member: Member): Member => {
+    const { password, ...safeMember } = member;
+    return safeMember;
+};
+
+const normalizeEmail = (value: unknown): string => String(value ?? '').trim().toLowerCase();
+
+const getPasswordCandidates = (value: unknown): string[] => {
+    const raw = String(value ?? '');
+    const trimmed = raw.trim();
+    const withoutLeadingQuote = trimmed.startsWith("'") ? trimmed.slice(1) : trimmed;
+    return Array.from(new Set([raw, trimmed, withoutLeadingQuote]));
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<Member | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Check for existing session on mount
     useEffect(() => {
         const storedUser = localStorage.getItem('srt-hst-user');
         if (storedUser) {
             try {
-                const parsedUser = JSON.parse(storedUser);
-                setUser(parsedUser);
+                const parsedUser = JSON.parse(storedUser) as Member;
+                setUser(sanitizeMember(parsedUser));
             } catch (error) {
                 console.error('Error parsing stored user:', error);
                 localStorage.removeItem('srt-hst-user');
@@ -34,27 +48,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
     }, []);
 
-    const login = async (email: string): Promise<{ success: boolean; message: string }> => {
+    const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
         try {
-            // Fetch members from Firebase
             const members = await getMembers();
-
-            // Find member by email (case-insensitive and trim whitespace)
-            const normalizedInputEmail = email.trim().toLowerCase();
-            const member = members.find(m => m.email?.toLowerCase() === normalizedInputEmail);
+            const normalizedEmail = normalizeEmail(email);
+            const member = members.find((m) => normalizeEmail(m.email) === normalizedEmail);
 
             if (!member) {
-                return { success: false, message: 'ไม่พบอีเมลนี้ในระบบ กรุณาติดต่อผู้ดูแลระบบ' };
+                return { success: false, message: 'Email not found. Please contact administrator.' };
             }
 
-            // Store user in state and localStorage
-            setUser(member);
-            localStorage.setItem('srt-hst-user', JSON.stringify(member));
+            if (!member.password) {
+                return { success: false, message: 'This account has no password set yet.' };
+            }
 
-            return { success: true, message: 'เข้าสู่ระบบสำเร็จ' };
+            const inputCandidates = getPasswordCandidates(password);
+            const memberPasswordCandidates = getPasswordCandidates(member.password);
+            const passwordMatched = inputCandidates.some((candidate) => memberPasswordCandidates.includes(candidate));
+
+            if (!passwordMatched) {
+                return { success: false, message: 'Invalid password.' };
+            }
+
+            const safeMember = sanitizeMember(member);
+            setUser(safeMember);
+            localStorage.setItem('srt-hst-user', JSON.stringify(safeMember));
+
+            return { success: true, message: 'Login successful.' };
         } catch (error) {
             console.error('Login error:', error);
-            return { success: false, message: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' };
+            return { success: false, message: 'An error occurred during login.' };
+        }
+    };
+
+    const register = async (name: string, email: string, password: string, role: Member['role']): Promise<{ success: boolean; message: string }> => {
+        try {
+            const normalizedEmail = normalizeEmail(email);
+            const cleanName = String(name || '').trim();
+            const cleanPassword = String(password || '').trim();
+            const validRoles: Member['role'][] = ['admin', 'project_manager', 'engineer', 'viewer'];
+            const cleanRole: Member['role'] = validRoles.includes(role) ? role : 'viewer';
+
+            if (!cleanName || !normalizedEmail || !cleanPassword) {
+                return { success: false, message: 'Please provide name, email, and password.' };
+            }
+
+            const members = await getMembers();
+            const exists = members.some((m) => normalizeEmail(m.email) === normalizedEmail);
+
+            if (exists) {
+                return { success: false, message: 'This email is already registered.' };
+            }
+
+            const memberId = await createMember({
+                name: cleanName,
+                email: normalizedEmail,
+                password: cleanPassword,
+                phone: '',
+                role: cleanRole
+            });
+
+            const safeMember = sanitizeMember({
+                id: memberId,
+                name: cleanName,
+                email: normalizedEmail,
+                role: cleanRole,
+                phone: ''
+            } as Member);
+
+            setUser(safeMember);
+            localStorage.setItem('srt-hst-user', JSON.stringify(safeMember));
+
+            return { success: true, message: 'Account created successfully.' };
+        } catch (error) {
+            console.error('Register error:', error);
+            return { success: false, message: 'Failed to create account.' };
         }
     };
 
@@ -66,13 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshUser = async () => {
         if (!user) return;
         try {
-            // Re-fetch members to get latest data
             const members = await getMembers();
-            const updatedUser = members.find(m => m.id === user.id);
+            const updatedUser = members.find((m) => m.id === user.id);
 
             if (updatedUser) {
-                setUser(updatedUser);
-                localStorage.setItem('srt-hst-user', JSON.stringify(updatedUser));
+                const safeMember = sanitizeMember(updatedUser);
+                setUser(safeMember);
+                localStorage.setItem('srt-hst-user', JSON.stringify(safeMember));
             }
         } catch (error) {
             console.error('Refresh user error:', error);
@@ -83,16 +151,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        register,
         logout,
         refreshUser,
         isAuthenticated: !!user,
     };
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

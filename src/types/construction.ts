@@ -125,6 +125,7 @@ export interface Member {
     id: string;
     name: string;
     email: string;
+    password?: string;
     phone?: string;
     role: 'admin' | 'project_manager' | 'engineer' | 'viewer';
     position?: string;
