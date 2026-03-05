@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -36,7 +36,13 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
     // Public routes that don't require authentication
     const publicRoutes = ['/login'];
-    const isPublicRoute = publicRoutes.includes(pathname);
+
+    // Allow public access to gantt view if readonly=true
+    const isSharedGantt = typeof window !== 'undefined'
+        ? pathname.startsWith('/gantt') && new URLSearchParams(window.location.search).get('readonly') === 'true'
+        : false;
+
+    const isPublicRoute = publicRoutes.includes(pathname) || isSharedGantt;
 
     useEffect(() => {
         if (!loading && !isAuthenticated && !isPublicRoute) {
@@ -58,6 +64,10 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
     // If it's a public route (login), render without layout
     if (isPublicRoute) {
+        if (isSharedGantt) {
+            // Give shared gantt a clean layout without sidebar
+            return <div className="min-h-screen bg-gray-50">{children}</div>;
+        }
         return <>{children}</>;
     }
 
