@@ -636,7 +636,8 @@ export default function GanttClient({
                     onProcurementOffsetsChange={setProcurementOffsets}
                     onApplyProcurementOffsetsToAll={isReadOnly ? undefined : handleApplyProcurementOffsetsToAll}
                     isApplyingOffsets={isApplyingOffsets}
-                    forceExpanded={isReadOnly}
+                    isSharedView={readonlyParam}
+                    forceExpanded={readonlyParam}
                 />
             )}
 

@@ -51,6 +51,7 @@ interface GanttChartProps {
     onApplyProcurementOffsetsToAll?: () => Promise<void>;
     isApplyingOffsets?: boolean;
     forceExpanded?: boolean;
+    isSharedView?: boolean;
 }
 
 export default function GanttChart({
@@ -78,7 +79,8 @@ export default function GanttChart({
     onProcurementOffsetsChange,
     onApplyProcurementOffsetsToAll,
     isApplyingOffsets = false,
-    forceExpanded = false
+    forceExpanded = false,
+    isSharedView = false
 }: GanttChartProps) {
 
     // Optimistic State
@@ -169,7 +171,7 @@ export default function GanttChart({
     const visibleColumnsStorageKey = isProcurementMode
         ? 'gantt_visibleColumns_procurement_v2'
         : 'gantt_visibleColumns_v3';
-    const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>(() => {
+    const [rawVisibleColumns, setRawVisibleColumns] = useState<VisibleColumns>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem(visibleColumnsStorageKey);
             if (saved) {
@@ -187,9 +189,24 @@ export default function GanttChart({
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            localStorage.setItem(visibleColumnsStorageKey, JSON.stringify(visibleColumns));
+            localStorage.setItem(visibleColumnsStorageKey, JSON.stringify(rawVisibleColumns));
         }
-    }, [visibleColumns, visibleColumnsStorageKey]);
+    }, [rawVisibleColumns, visibleColumnsStorageKey]);
+
+    const visibleColumns = useMemo(() => {
+        if (isSharedView) {
+            return {
+                ...rawVisibleColumns,
+                cost: false,
+                team: false
+            };
+        }
+        return rawVisibleColumns;
+    }, [rawVisibleColumns, isSharedView]);
+
+    const setVisibleColumns = React.useCallback((valOrUpdater: React.SetStateAction<VisibleColumns>) => {
+        setRawVisibleColumns(valOrUpdater);
+    }, []);
 
     // Name Column Resizing
     const nameColumnWidthStorageKey = 'gantt_nameColumnWidth_v1';
@@ -1058,6 +1075,7 @@ export default function GanttChart({
                 onProcurementOffsetsChange={onProcurementOffsetsChange}
                 onApplyProcurementOffsetsToAll={onApplyProcurementOffsetsToAll}
                 isApplyingOffsets={isApplyingOffsets}
+                isSharedView={isSharedView}
             />
 
             {/* Drag Snap Tooltip */}

@@ -72,6 +72,7 @@ interface GanttToolbarProps {
     }) => void;
     onApplyProcurementOffsetsToAll?: () => Promise<void>;
     isApplyingOffsets?: boolean;
+    isSharedView?: boolean;
 }
 
 export default function GanttToolbar({
@@ -105,7 +106,8 @@ export default function GanttToolbar({
     procurementOffsets = { dueProcurementDays: -14, dueMaterialOnSiteDays: -7, dateOfUseOffsetDays: 0 },
     onProcurementOffsetsChange,
     onApplyProcurementOffsetsToAll,
-    isApplyingOffsets = false
+    isApplyingOffsets = false,
+    isSharedView = false
 }: GanttToolbarProps) {
     const [dateEditMode, setDateEditMode] = React.useState<'all' | 'item'>('all');
     const [isBudgetEditing, setIsBudgetEditing] = React.useState(false);
@@ -168,7 +170,7 @@ export default function GanttToolbar({
                 <div className="hidden lg:block w-px h-8 bg-gray-200"></div>
 
                 {/* KPI / Stats Minimalist View */}
-                {showHeaderStats && (
+                {showHeaderStats && !isSharedView && (
                     <div className="hidden lg:flex items-center gap-3">
                         {!isProcurementMode && (
                             <>
@@ -353,14 +355,16 @@ export default function GanttToolbar({
                             )}
                         </div>
                     )}
-                    <button
-                        onClick={() => setShowHeaderStats(prev => !prev)}
-                        title={showHeaderStats ? 'Hide Header Stats' : 'Show Header Stats'}
-                        className={`p-2 rounded-md transition-all ${showHeaderStats ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
-                    >
-                        {showHeaderStats ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                    {!hideDependencyControl && (
+                    {!isSharedView && (
+                        <button
+                            onClick={() => setShowHeaderStats(prev => !prev)}
+                            title={showHeaderStats ? 'Hide Header Stats' : 'Show Header Stats'}
+                            className={`p-2 rounded-md transition-all ${showHeaderStats ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                        >
+                            {showHeaderStats ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                    )}
+                    {!hideDependencyControl && !isSharedView && (
                         <button onClick={onToggleDependencies}
                             title={showDependencies ? 'Hide dependencies' : 'Show dependencies'}
                             className={`p-2 rounded-md transition-all ${showDependencies ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}>
@@ -408,10 +412,12 @@ export default function GanttToolbar({
                                 <div className="p-1">
                                     {!isProcurementMode && (
                                         <>
-                                            <button onClick={() => onToggleColumn('cost')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                                <span className="flex items-center gap-3"><Wallet className="w-4 h-4 text-gray-400" /> Cost</span>
-                                                {visibleColumns.cost && <Check className="w-4 h-4 text-blue-600" />}
-                                            </button>
+                                            {!isSharedView && (
+                                                <button onClick={() => onToggleColumn('cost')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                    <span className="flex items-center gap-3"><Wallet className="w-4 h-4 text-gray-400" /> Cost</span>
+                                                    {visibleColumns.cost && <Check className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            )}
                                             <button onClick={() => onToggleColumn('weight')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
                                                 <span className="flex items-center gap-3"><span className="w-4 h-4 flex items-center justify-center font-bold text-gray-400 text-xs">W</span> Weight</span>
                                                 {visibleColumns.weight && <Check className="w-4 h-4 text-blue-600" />}
@@ -464,10 +470,12 @@ export default function GanttToolbar({
                                                     {visibleColumns.actualDuration && <Check className="w-4 h-4 text-blue-600" />}
                                                 </button>
                                             )}
-                                            <button onClick={() => onToggleColumn('team')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
-                                                <span className="flex items-center gap-3"><Users className="w-4 h-4 text-gray-400" /> Team</span>
-                                                {visibleColumns.team && <Check className="w-4 h-4 text-blue-600" />}
-                                            </button>
+                                            {!isSharedView && (
+                                                <button onClick={() => onToggleColumn('team')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
+                                                    <span className="flex items-center gap-3"><Users className="w-4 h-4 text-gray-400" /> Team</span>
+                                                    {visibleColumns.team && <Check className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            )}
                                             <button onClick={() => onToggleColumn('progress')} className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center justify-between transition-colors">
                                                 <span className="flex items-center gap-3"><TrendingUp className="w-4 h-4 text-gray-400" /> Progress (%)</span>
                                                 {visibleColumns.progress && <Check className="w-4 h-4 text-blue-600" />}
