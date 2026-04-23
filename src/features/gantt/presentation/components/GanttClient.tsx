@@ -21,13 +21,15 @@ export default function GanttClient({
     windowMode = 'project',
     pageTitle = 'Gantt Chart',
     pageSubtitle = 'Project planning and scheduling',
-    isProcurementPage = false
+    isProcurementPage = false,
+    showSCurveOverlay = false
 }: {
     preSelectedProjectId?: string;
     windowMode?: GanttWindowMode;
     pageTitle?: string;
     pageSubtitle?: string;
     isProcurementPage?: boolean;
+    showSCurveOverlay?: boolean;
 } = {}) {
     const searchParams = useSearchParams();
     const projectParam = preSelectedProjectId || searchParams.get('project') || searchParams.get('projectId');
@@ -572,12 +574,20 @@ export default function GanttClient({
                                         Procurement Plan
                                     </Link>
                                     <Link
+                                        href={`/gantt-scurve/${selectedProject.id}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                                        Gantt + S-Curve
+                                    </Link>
+                                    <Link
                                         href={`/scurve/${selectedProject.id}`}
                                         className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                         onClick={() => setIsViewMenuOpen(false)}
                                     >
                                         <TrendingUp className="w-4 h-4 text-emerald-600" />
-                                        S-Curve Analysis
+                                        S-Curve Summary
                                     </Link>
                                 </div>
                             )}
@@ -638,6 +648,7 @@ export default function GanttClient({
                     isApplyingOffsets={isApplyingOffsets}
                     isSharedView={readonlyParam}
                     forceExpanded={readonlyParam}
+                    showSCurveOverlay={showSCurveOverlay}
                 />
             )}
 

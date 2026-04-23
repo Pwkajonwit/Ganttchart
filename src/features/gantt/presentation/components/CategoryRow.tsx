@@ -171,7 +171,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
                     {isProcurementMode && visibleColumns.duration && <div className="w-[62px] h-full flex items-center justify-end border-l border-gray-300/70 text-[10px] text-gray-500 pr-2 shrink-0">-</div>}
                     {isProcurementMode && visibleColumns.procurementStatus && <div className="w-[96px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-500 pl-2 shrink-0">-</div>}
                     {visibleColumns.period && (
-                        <div className="w-[150px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
+                        <div className="w-[170px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] text-gray-600 font-mono shrink-0 pl-2 truncate">
                             {categorySummary.dateRange ? (
                                 formatDateRange(categorySummary.dateRange.start, categorySummary.dateRange.end)
                             ) : '-'}
@@ -196,7 +196,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
                 {/* Category Summary Bar on Chart */}
                 <div className="flex-1 bg-white relative border-l border-gray-300/90" style={{ width: `${timeline.items.length * config.cellWidth}px` }}>
                     {/* Grid lines background */}
-                    <div className="absolute inset-0 flex pointer-events-none">
+                    <div className="absolute inset-0 flex pointer-events-none print-hide-bg">
                         {timeline.items.map((item, idx) => (
                             <div key={idx} className={`flex-shrink-0 box-border h-full
                                 ${isFourWeekView && viewMode === 'day'

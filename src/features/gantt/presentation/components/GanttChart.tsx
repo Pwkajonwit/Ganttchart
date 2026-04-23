@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Task, Employee } from '@/types/construction';
-import { differenceInDays, parseISO, addMonths, subMonths, isAfter, isBefore, format, addDays, differenceInMonths } from 'date-fns';
+import { differenceInDays, parseISO, addMonths, subMonths, isAfter, isBefore, format, addDays, differenceInMonths, isToday } from 'date-fns';
 
 import { ViewMode, RowDragState, VisibleColumns, ColorMenuConfig } from './types';
 import { DependencyLines } from './DependencyLines';
@@ -12,6 +12,7 @@ import { getCategorySummary, getCategoryBarStyle, formatDateRange } from './util
 import GanttToolbar from './GanttToolbar';
 import TimelineHeader from './TimelineHeader';
 import { usePdfExport } from '@/hooks/usePdfExport';
+import { computeSCurveData } from '@/features/scurve/domain/accumulation';
 
 // Hooks
 import { useGanttDrag } from './hooks/useGanttDrag';
@@ -52,6 +53,7 @@ interface GanttChartProps {
     isApplyingOffsets?: boolean;
     forceExpanded?: boolean;
     isSharedView?: boolean;
+    showSCurveOverlay?: boolean;
 }
 
 export default function GanttChart({
@@ -80,7 +82,8 @@ export default function GanttChart({
     onApplyProcurementOffsetsToAll,
     isApplyingOffsets = false,
     forceExpanded = false,
-    isSharedView = false
+    isSharedView = false,
+    showSCurveOverlay = false,
 }: GanttChartProps) {
 
     // Optimistic State
@@ -110,12 +113,14 @@ export default function GanttChart({
     // Container Refs
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState(0);
+    const [containerHeight, setContainerHeight] = useState(0);
 
     useEffect(() => {
         if (!scrollContainerRef.current) return;
         const resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
                 if (entry.contentRect.width > 0) setContainerWidth(entry.contentRect.width);
+                if (entry.contentRect.height > 0) setContainerHeight(entry.contentRect.height);
             }
         });
         resizeObserver.observe(scrollContainerRef.current);
@@ -695,60 +700,51 @@ export default function GanttChart({
         if (isProcurementMode && visibleColumns.procurementStatus) w += 96;
         if (visibleColumns.planDuration) w += 60;
         if (visibleColumns.actualDuration) w += 60;
-        if (visibleColumns.period) w += 150; // w-[150px]
+        if (visibleColumns.period) w += 170; // w-[170px]
         if (visibleColumns.team) w += EMPLOYEE_COL_WIDTH;
         if (visibleColumns.progress) w += 80;
         return w + 30; // buffer
     }, [visibleColumns, EMPLOYEE_COL_WIDTH, isProcurementMode, nameColumnWidth]);
 
     // PDF Export
-    const { containerRef: chartContainerRef, exportToPdf } = usePdfExport({
+    const { containerRef: chartContainerRef, exportToPdf, isPdfExporting } = usePdfExport({
         title,
         pageSize: 'A3',
         orientation: 'landscape',
         margin: '4mm',
         fitToWidth: true,
-        fitToWidthMinScale: 0.1
+        fitToWidthMinScale: 0.35,
+        allowSVG: true
     });
 
-    const handleExportPDF = () => {
-        if (isExportingPdf) return;
+    const handleExportPDF = async () => {
+        if (isExportingPdf || isPdfExporting) return;
 
         const scrollEl = scrollContainerRef.current;
         const previousScrollTop = scrollEl?.scrollTop ?? 0;
         const previousScrollLeft = scrollEl?.scrollLeft ?? 0;
-        let finalized = false;
 
-        const finalize = () => {
-            if (finalized) return;
-            finalized = true;
-            setIsExportingPdf(false);
-
-            if (scrollEl) {
-                scrollEl.scrollTo({ top: previousScrollTop, left: previousScrollLeft, behavior: 'auto' });
-            }
-            setScrollTop(previousScrollTop);
-            setScrollLeft(previousScrollLeft);
-        };
+        setIsExportingPdf(true);
 
         if (scrollEl) {
             scrollEl.scrollTo({ top: 0, left: 0, behavior: 'auto' });
         }
         setScrollTop(0);
         setScrollLeft(0);
-        setIsExportingPdf(true);
 
-        const afterPrintHandler = () => finalize();
-        window.addEventListener('afterprint', afterPrintHandler, { once: true });
+        // Wait a frame for component to re-render in expanded mode (virtualization disabled)
+        await new Promise(resolve => setTimeout(resolve, 150));
 
-        setTimeout(() => {
-            exportToPdf();
-            // Fallback in case afterprint is not fired by browser
-            setTimeout(() => {
-                window.removeEventListener('afterprint', afterPrintHandler);
-                finalize();
-            }, 2500);
-        }, 150);
+        try {
+            await exportToPdf();
+        } finally {
+            setIsExportingPdf(false);
+            if (scrollEl) {
+                scrollEl.scrollTo({ top: previousScrollTop, left: previousScrollLeft, behavior: 'auto' });
+            }
+            setScrollTop(previousScrollTop);
+            setScrollLeft(previousScrollLeft);
+        }
     };
 
     // Handlers needed for children
@@ -1032,775 +1028,943 @@ export default function GanttChart({
     };
 
     return (
-        <div
-            ref={chartContainerRef}
-            className={`relative flex flex-col bg-white border border-gray-300 w-full max-w-full font-sans ${isExportingPdf ? 'overflow-visible' : 'overflow-hidden'} ${isExpanded
-                ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none'
-                : isExportingPdf ? 'h-auto rounded' : 'h-[750px] rounded'
-                }`}
-        >
-            <GanttToolbar
-                title={title}
-                timeRange={timeRange}
-                viewMode={viewMode}
-                onViewModeChange={handleViewModeChange}
-                allowedViewModes={allowedViewModes}
-                showDates={showDates}
-                onToggleDates={() => setShowDates(!showDates)}
-                onNavigate={navigate}
-                onJumpToToday={handleJumpToToday}
-                onExport={handleExportPDF}
-                onExportPDF={handleExportPDF}
-                budgetStats={budgetStats}
-                kpiStats={kpiStats}
-                visibleColumns={visibleColumns}
-                onToggleColumn={(col) => setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }))}
-                onToggleAllColumns={(visible) => {
-                    setVisibleColumns((prev) => {
-                        const next = { ...prev };
-                        (Object.keys(next) as (keyof VisibleColumns)[]).forEach(key => {
-                            next[key] = visible;
+        <>
+            {(isExportingPdf || isPdfExporting) && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all">
+                    <div className="bg-white px-8 py-6 rounded-xl shadow-2xl flex flex-col items-center border border-gray-100">
+                        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4 shadow-sm"></div>
+                        <h4 className="text-gray-900 font-bold text-lg">กำลังสร้างไฟล์ PDF...</h4>
+                        <p className="text-sm text-gray-500 mt-2">กรุณารอสักครู่ อาจใช้เวลา 3-10 วินาที</p>
+                    </div>
+                </div>
+            )}
+            <div
+                ref={chartContainerRef}
+                className={`gantt-chart-root relative flex flex-col bg-white border border-gray-300 w-full max-w-full font-sans ${isExportingPdf ? 'overflow-visible is-pdf-exporting' : 'overflow-hidden'} ${isExpanded
+                    ? 'fixed inset-0 z-[1200] h-screen w-screen rounded-none border-0 shadow-none'
+                    : isExportingPdf ? 'h-auto rounded' : 'h-[750px] rounded'
+                    }`}
+            >
+                <GanttToolbar
+                    title={title}
+                    timeRange={timeRange}
+                    viewMode={viewMode}
+                    onViewModeChange={handleViewModeChange}
+                    allowedViewModes={allowedViewModes}
+                    showDates={showDates}
+                    onToggleDates={() => setShowDates(!showDates)}
+                    onNavigate={navigate}
+                    onJumpToToday={handleJumpToToday}
+                    onExport={handleExportPDF}
+                    onExportPDF={handleExportPDF}
+                    budgetStats={budgetStats}
+                    kpiStats={kpiStats}
+                    visibleColumns={visibleColumns}
+                    onToggleColumn={(col) => setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }))}
+                    onToggleAllColumns={(visible) => {
+                        setVisibleColumns((prev) => {
+                            const next = { ...prev };
+                            (Object.keys(next) as (keyof VisibleColumns)[]).forEach(key => {
+                                next[key] = visible;
+                            });
+                            return next;
                         });
-                        return next;
-                    });
-                }}
-                showDependencies={showDependencies}
-                onToggleDependencies={() => setShowDependencies(!showDependencies)}
-                customDate={customDate}
-                onCustomDateChange={setCustomDate}
-                isExpanded={isExpanded}
-                onToggleExpand={forceExpanded ? undefined : () => setIsExpanded(prev => !prev)}
-                isProcurementMode={isProcurementMode}
-                procurementOffsets={procurementOffsets}
-                onProcurementOffsetsChange={onProcurementOffsetsChange}
-                onApplyProcurementOffsetsToAll={onApplyProcurementOffsetsToAll}
-                isApplyingOffsets={isApplyingOffsets}
-                isSharedView={isSharedView}
-            />
-
-            {/* Drag Snap Tooltip */}
-            {dragState && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-gray-800/90 text-white text-xs px-3 py-1.5 rounded-full shadow-xl flex items-center gap-2 pointer-events-none backdrop-blur-sm border border-gray-600">
-                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Snap</span>
-                    <span className="font-mono font-medium">
-                        {dragState.currentStart ? format(dragState.currentStart, 'dd MMM yyyy') : '-'}
-                        <span className="mx-1 text-gray-500">→</span>
-                        {dragState.currentEnd ? format(dragState.currentEnd, 'dd MMM yyyy') : '-'}
-                    </span>
-                </div>
-            )}
-
-            {/* Saving Order Indicator */}
-            {isSavingOrder && (
-                <div className="absolute top-12 left-1/2 -translate-x-1/2 z-[100] bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-medium animate-pulse">
-                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving...
-                </div>
-            )}
-
-            <div className={`w-full ${isExportingPdf ? '' : 'flex-1 min-h-0 relative'}`}>
-                <div
-                    ref={scrollContainerRef}
-                    data-pdf-scroll-container
-                    className={isExportingPdf ? 'relative overflow-visible' : 'absolute inset-0 overflow-auto custom-scrollbar'}
-                    onScroll={(e) => {
-                        if (!isExportingPdf) {
-                            setScrollTop(e.currentTarget.scrollTop);
-                            setScrollLeft(e.currentTarget.scrollLeft);
-                        }
                     }}
-                >
-                    <div className="min-w-max flex flex-col">
-                        <TimelineHeader
-                            viewMode={viewMode}
-                            timeline={timeline}
-                            config={config}
-                            stickyWidth={stickyWidth}
-                            showDates={showDates}
-                            referenceDate={customDate}
-                            visibleColumns={visibleColumns}
-                            employeeColumnWidth={EMPLOYEE_COL_WIDTH}
-                            isFourWeekView={isFourWeekView}
-                            isProcurementMode={isProcurementMode}
-                            nameColumnWidth={nameColumnWidth}
-                            onNameColumnWidthChange={setNameColumnWidth}
-                        />
+                    showDependencies={showDependencies}
+                    onToggleDependencies={() => setShowDependencies(!showDependencies)}
+                    customDate={customDate}
+                    onCustomDateChange={setCustomDate}
+                    isExpanded={isExpanded}
+                    onToggleExpand={forceExpanded ? undefined : () => setIsExpanded(prev => !prev)}
+                    isProcurementMode={isProcurementMode}
+                    procurementOffsets={procurementOffsets}
+                    onProcurementOffsetsChange={onProcurementOffsetsChange}
+                    onApplyProcurementOffsetsToAll={onApplyProcurementOffsetsToAll}
+                    isApplyingOffsets={isApplyingOffsets}
+                    isSharedView={isSharedView}
+                />
 
-                        <div className="relative">
-                            {/* Reference Day Highlight - Clipped to Timeline Area */}
-                            {(() => {
-                                const targetDate = customDate || new Date();
-                                const todayOffset = differenceInDays(targetDate, timeRange.start);
-                                let leftPx = 0;
-                                if (viewMode === 'day') leftPx = todayOffset * config.cellWidth;
-                                else if (viewMode === 'week') leftPx = (todayOffset / 7) * config.cellWidth;
-                                else leftPx = (todayOffset / 30.44) * config.cellWidth;
+                {/* Drag Snap Tooltip */}
+                {dragState && (
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-gray-800/90 text-white text-xs px-3 py-1.5 rounded-full shadow-xl flex items-center gap-2 pointer-events-none backdrop-blur-sm border border-gray-600">
+                        <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Snap</span>
+                        <span className="font-mono font-medium">
+                            {dragState.currentStart ? format(dragState.currentStart, 'dd MMM yyyy') : '-'}
+                            <span className="mx-1 text-gray-500">→</span>
+                            {dragState.currentEnd ? format(dragState.currentEnd, 'dd MMM yyyy') : '-'}
+                        </span>
+                    </div>
+                )}
 
-                                return (
-                                    <div className="absolute top-0 bottom-0 right-0 z-30 pointer-events-none overflow-hidden"
-                                        style={{ left: `${stickyWidth}px`, clipPath: `inset(0px 0px 0px ${Math.max(0, scrollLeft)}px)` }}>
-                                        {viewMode === 'day' ? (
-                                            <div
-                                                className="absolute top-0 bottom-0 bg-green-100/35"
-                                                style={{ left: `${leftPx}px`, width: `${config.cellWidth}px` }}
-                                            >
-                                                <div className="absolute top-0 bottom-0 w-px bg-yellow-500/80" style={{ left: '50%' }} />
-                                            </div>
-                                        ) : (
-                                            <div
-                                                className="absolute top-0 bottom-0 w-px bg-orange-500"
-                                                style={{ left: `${leftPx}px` }}
-                                            />
-                                        )}
-                                    </div>
-                                );
-                            })()}
+                {/* Saving Order Indicator */}
+                {isSavingOrder && (
+                    <div className="absolute top-12 left-1/2 -translate-x-1/2 z-[100] bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-medium animate-pulse">
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Saving...
+                    </div>
+                )}
 
-                            {showDependencies && (
-                                <DependencyLines
-                                    tasks={optimisticTasks}
-                                    visibleRowMap={visibleRowMap}
-                                    config={config}
-                                    viewMode={viewMode}
-                                    timeRange={timeRange}
-                                    stickyWidth={stickyWidth}
-                                    onDeleteDependency={(taskId, predId) => onTaskUpdate?.(taskId, { predecessors: optimisticTasks.find(t => t.id === taskId)?.predecessors?.filter(p => p !== predId) })}
-                                    offsetY={36}
-                                    startIndex={startIndex}
-                                    endIndex={endIndex}
-                                    scrollLeft={scrollLeft}
-                                />
-                            )}
+                <div className={`w-full relative ${isExportingPdf ? '' : 'flex-1 min-h-0'}`}>
 
-                            {/* Project Summary Row */}
-                            {(() => {
-                                const leafTasks = optimisticTasks.filter(t => t.type !== 'group');
-                                const projSummary = getCategorySummary(leafTasks, getTaskWeight);
-                                const displayProgress = summaryStats.progress;
-                                const displayCost = summaryStats.cost;
-                                const projDateRange = projSummary.dateRange;
+                    {/* S-Curve Glass Overlay Panel removed from here */}
 
-                                return (
-                                    <div className="border-b-2 border-gray-300 stick-project-header relative bg-white">
-                                        <div className="flex bg-blue-50 border-b border-gray-200 h-9 font-bold text-gray-800">
-                                            <div className="sticky left-0 z-[60] bg-blue-50 border-r border-gray-300 pl-4 flex items-center shadow-[1px_0_0px_rgba(0,0,0,0.05)]"
-                                                style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}>
-                                                <div className="flex-1 truncate uppercase tracking-wider flex items-center">
-                                                    <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded mr-2">PROJECT</span>
-                                                    {title || "Construction Project"}
-                                                    <span className="ml-2 text-[9px] text-gray-500 font-normal bg-white/50 px-1.5 rounded-full">{leafTasks.length} items</span>
+                    <div
+                        ref={scrollContainerRef}
+                        data-pdf-scroll-container
+                        className={isExportingPdf ? 'relative overflow-visible' : 'absolute inset-0 overflow-auto custom-scrollbar'}
+                        onScroll={(e) => {
+                            if (!isExportingPdf) {
+                                setScrollTop(e.currentTarget.scrollTop);
+                                setScrollLeft(e.currentTarget.scrollLeft);
+                            }
+                        }}
+                    >
+                        <div className="min-w-max flex flex-col">
+                            <TimelineHeader
+                                viewMode={viewMode}
+                                timeline={timeline}
+                                config={config}
+                                stickyWidth={stickyWidth}
+                                showDates={showDates}
+                                referenceDate={customDate}
+                                visibleColumns={visibleColumns}
+                                employeeColumnWidth={EMPLOYEE_COL_WIDTH}
+                                isFourWeekView={isFourWeekView}
+                                isProcurementMode={isProcurementMode}
+                                nameColumnWidth={nameColumnWidth}
+                                onNameColumnWidthChange={setNameColumnWidth}
+                            />
+
+                            <div className="relative">
+                                {/* Reference Day Highlight - Clipped to Timeline Area */}
+                                {(() => {
+                                    const targetDate = customDate || new Date();
+                                    const todayOffset = differenceInDays(targetDate, timeRange.start);
+                                    let leftPx = 0;
+                                    if (viewMode === 'day') leftPx = todayOffset * config.cellWidth;
+                                    else if (viewMode === 'week') leftPx = (todayOffset / 7) * config.cellWidth;
+                                    else leftPx = (todayOffset / 30.44) * config.cellWidth;
+
+                                    return (
+                                        <div className="absolute top-0 bottom-0 right-0 z-30 pointer-events-none overflow-hidden"
+                                            style={{ left: `${stickyWidth}px`, clipPath: `inset(0px 0px 0px ${Math.max(0, scrollLeft)}px)` }}>
+                                            {viewMode === 'day' ? (
+                                                <div
+                                                    className="absolute top-0 bottom-0 bg-green-100/35"
+                                                    style={{ left: `${leftPx}px`, width: `${config.cellWidth}px` }}
+                                                >
+                                                    <div className="absolute top-0 bottom-0 w-px bg-yellow-500/80" style={{ left: '50%' }} />
                                                 </div>
+                                            ) : (
+                                                <div
+                                                    className="absolute top-0 bottom-0 w-px bg-orange-500"
+                                                    style={{ left: `${leftPx}px` }}
+                                                />
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
-                                                {/* Columns */}
-                                                {visibleColumns.cost && (
-                                                    <div className="w-[100px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
-                                                        {displayCost.toLocaleString()}
-                                                    </div>
-                                                )}
-                                                {visibleColumns.weight && (
-                                                    <div className="w-[70px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
-                                                        100%
-                                                    </div>
-                                                )}
-                                                {visibleColumns.quantity && (
-                                                    <div className="w-[100px] h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate">
-                                                        -
-                                                    </div>
-                                                )}
-                                                {isProcurementMode && visibleColumns.dueProcurement && (
-                                                    <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
-                                                )}
-                                                {isProcurementMode && visibleColumns.dueMaterialOnSite && (
-                                                    <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
-                                                )}
-                                                {isProcurementMode && visibleColumns.dateOfUse && (
-                                                    <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
-                                                )}
-                                                {isProcurementMode && visibleColumns.duration && (
-                                                    <div className="w-[62px] h-full flex items-center justify-end border-l border-gray-300/70 text-[10px] shrink-0 pr-2 truncate">-</div>
-                                                )}
-                                                {isProcurementMode && visibleColumns.procurementStatus && (
-                                                    <div className="w-[96px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
-                                                )}
-                                                {visibleColumns.period && (
-                                                    <div className="w-[150px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">
-                                                        {projDateRange ? formatDateRange(projDateRange.start, projDateRange.end) : '-'}
-                                                    </div>
-                                                )}
-                                                {visibleColumns.team && (
-                                                    <div
-                                                        className="h-full flex items-center justify-center border-l border-gray-300/70 shrink-0"
-                                                        style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
-                                                    />
-                                                )}
-                                                {visibleColumns.progress && (
-                                                    <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 gap-1 pl-2 truncate text-blue-700">
-                                                        {displayProgress.toFixed(0)}%
-                                                    </div>
-                                                )}
-                                            </div>
+                                {/* S-Curve Overlay - removed from here, rendered outside scroll body */}
 
-                                            {/* Project Bar Chart */}
-                                            <div
-                                                className="flex-none relative overflow-hidden border-l border-gray-300/90 bg-white"
-                                                style={{ width: `${timeline.items.length * config.cellWidth}px`, minWidth: `${timeline.items.length * config.cellWidth}px` }}
-                                            >
-                                                <div className="absolute inset-0 flex pointer-events-none">
-                                                    {timeline.items.map((item, idx) => (
-                                                        <div key={idx} className={`flex-shrink-0 box-border h-full
-                                                            ${isFourWeekView && viewMode === 'day'
-                                                                ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
-                                                                : viewMode === 'week'
-                                                                    ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                                                    : 'border-r border-dashed border-gray-300/60'}
-                                                            ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''}`}
-                                                            style={{ width: config.cellWidth }} />
-                                                    ))}
-                                                </div>
-                                                {projDateRange && (
-                                                    <div
-                                                        className="absolute h-4 top-[10px] rounded-full border border-blue-600/30 shadow-sm"
-                                                        style={{
-                                                            ...getCategoryBarStyle(projDateRange, viewMode, config, timeRange),
-                                                            backgroundColor: 'rgba(59, 130, 246, 0.25)',
-                                                            zIndex: 35
-                                                        }}
-                                                    >
+                                {showDependencies && (
+                                    <DependencyLines
+                                        tasks={optimisticTasks}
+                                        visibleRowMap={visibleRowMap}
+                                        config={config}
+                                        viewMode={viewMode}
+                                        timeRange={timeRange}
+                                        stickyWidth={stickyWidth}
+                                        onDeleteDependency={(taskId, predId) => onTaskUpdate?.(taskId, { predecessors: optimisticTasks.find(t => t.id === taskId)?.predecessors?.filter(p => p !== predId) })}
+                                        offsetY={36}
+                                        startIndex={startIndex}
+                                        endIndex={endIndex}
+                                        scrollLeft={scrollLeft}
+                                    />
+                                )}
+
+                                {/* Project Summary Row */}
+                                {(() => {
+                                    const leafTasks = optimisticTasks.filter(t => t.type !== 'group');
+                                    const projSummary = getCategorySummary(leafTasks, getTaskWeight);
+                                    const displayProgress = summaryStats.progress;
+                                    const displayCost = summaryStats.cost;
+                                    const projDateRange = projSummary.dateRange;
+
+                                    return (
+                                        <div className="border-b-2 border-gray-300 stick-project-header relative bg-white">
+                                            <div className="flex bg-blue-50 border-b border-gray-200 h-9 font-bold text-gray-800">
+                                                <div className="sticky left-0 z-[60] bg-blue-50 border-r border-gray-300 pl-4 flex items-center shadow-[1px_0_0px_rgba(0,0,0,0.05)]"
+                                                    style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}>
+                                                    <div className="flex-1 truncate uppercase tracking-wider flex items-center">
+                                                        <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded mr-2">PROJECT</span>
+                                                        {title || "Construction Project"}
+                                                        <span className="ml-2 text-[9px] text-gray-500 font-normal bg-white/50 px-1.5 rounded-full">{leafTasks.length} items</span>
+                                                    </div>
+
+                                                    {/* Columns */}
+                                                    {visibleColumns.cost && (
+                                                        <div className="w-[100px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
+                                                            {displayCost.toLocaleString()}
+                                                        </div>
+                                                    )}
+                                                    {visibleColumns.weight && (
+                                                        <div className="w-[70px] h-full flex items-center justify-end border-l border-gray-300/70 text-xs shrink-0 pr-2 truncate">
+                                                            100%
+                                                        </div>
+                                                    )}
+                                                    {visibleColumns.quantity && (
+                                                        <div className="w-[100px] h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 pl-2 truncate">
+                                                            -
+                                                        </div>
+                                                    )}
+                                                    {isProcurementMode && visibleColumns.dueProcurement && (
+                                                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
+                                                    )}
+                                                    {isProcurementMode && visibleColumns.dueMaterialOnSite && (
+                                                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
+                                                    )}
+                                                    {isProcurementMode && visibleColumns.dateOfUse && (
+                                                        <div className="w-[78px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
+                                                    )}
+                                                    {isProcurementMode && visibleColumns.duration && (
+                                                        <div className="w-[62px] h-full flex items-center justify-end border-l border-gray-300/70 text-[10px] shrink-0 pr-2 truncate">-</div>
+                                                    )}
+                                                    {isProcurementMode && visibleColumns.procurementStatus && (
+                                                        <div className="w-[96px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">-</div>
+                                                    )}
+                                                    {visibleColumns.period && (
+                                                        <div className="w-[170px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] shrink-0 pl-2 truncate">
+                                                            {projDateRange ? formatDateRange(projDateRange.start, projDateRange.end) : '-'}
+                                                        </div>
+                                                    )}
+                                                    {visibleColumns.team && (
                                                         <div
-                                                            className="absolute left-0 top-0 bottom-0 rounded-full bg-blue-600"
-                                                            style={{
-                                                                width: `${displayProgress}%`,
-                                                                opacity: 0.9
-                                                            }}
+                                                            className="h-full flex items-center justify-center border-l border-gray-300/70 shrink-0"
+                                                            style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
                                                         />
+                                                    )}
+                                                    {visibleColumns.progress && (
+                                                        <div className="w-20 h-full flex items-center justify-start border-l border-gray-300/70 shrink-0 gap-1 pl-2 truncate text-blue-700">
+                                                            {displayProgress.toFixed(0)}%
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Project Bar Chart */}
+                                                <div
+                                                    className="flex-none relative overflow-hidden border-l border-gray-300/90 bg-white [.is-pdf-exporting_&]:bg-transparent"
+                                                    style={{ width: `${timeline.items.length * config.cellWidth}px`, minWidth: `${timeline.items.length * config.cellWidth}px` }}
+                                                >
+                                                    <div className="absolute inset-0 flex pointer-events-none print-hide-bg">
+                                                        {timeline.items.map((item, idx) => (
+                                                            <div key={idx} className={`flex-shrink-0 box-border h-full
+                                                            ${isFourWeekView && viewMode === 'day'
+                                                                    ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
+                                                                    : viewMode === 'week'
+                                                                        ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                                                        : 'border-r border-dashed border-gray-300/60'}
+                                                            ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''}`}
+                                                                style={{ width: config.cellWidth }} />
+                                                        ))}
                                                     </div>
-                                                )}
+                                                    {projDateRange && (
+                                                        <div
+                                                            className="absolute h-4 top-[10px] rounded-full border border-blue-600/30 shadow-sm"
+                                                            style={{
+                                                                ...getCategoryBarStyle(projDateRange, viewMode, config, timeRange),
+                                                                backgroundColor: 'rgba(59, 130, 246, 0.25)',
+                                                                zIndex: 35
+                                                            }}
+                                                        >
+                                                            <div
+                                                                className="absolute left-0 top-0 bottom-0 rounded-full bg-blue-600"
+                                                                style={{
+                                                                    width: `${displayProgress}%`,
+                                                                    opacity: 0.9
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                );
-                            })()}
+                                    );
+                                })()}
 
-                            <div style={isExportingPdf ? undefined : { height: `${totalHeight}px`, position: 'relative' }}>
-                                <div style={isExportingPdf ? undefined : { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${offsetY}px)` }}>
-                                    {(isExportingPdf ? virtualData.rows : visibleRows).map((row) => {
-                                        if (row.type === 'category') {
-                                            const { category, catData } = row;
-                                            return (
-                                                <CategoryRow
-                                                    key={row.id}
-                                                    category={category}
-                                                    catData={catData}
-                                                    collapsedCategories={collapsedCategories}
-                                                    toggleCategory={toggleCategory}
-                                                    categoryColors={categoryColors}
-                                                    setActiveColorMenu={setActiveColorMenu}
-                                                    onAddTaskToCategory={onAddTaskToCategory}
-                                                    visibleColumns={visibleColumns}
-                                                    stickyWidth={stickyWidth}
-                                                    employeeColumnWidth={EMPLOYEE_COL_WIDTH}
-                                                    timeline={timeline}
-                                                    config={config}
-                                                    viewMode={viewMode}
-                                                    isFourWeekView={isFourWeekView}
-                                                    isProcurementMode={isProcurementMode}
-                                                    timeRange={timeRange}
-                                                    getTaskWeight={getTaskWeight}
-                                                    onCategoryDragStart={handleCategoryDragStart}
-                                                    onCategoryDragOver={handleCategoryDragOver}
-                                                    onCategoryDrop={handleCategoryDrop}
-                                                    isDragging={categoryDragState?.id === category && categoryDragState?.type === 'category'}
-                                                    loadingIds={effectiveLoadingIds}
-                                                />
-                                            );
-                                        }
+                                <div className={isExportingPdf ? '' : 'relative'} style={isExportingPdf ? undefined : { height: `${totalHeight}px` }}>
+                                    {isExportingPdf && (
+                                        <div className="absolute top-0 bottom-0 pointer-events-none z-0 flex border-l border-gray-300/90" style={{ left: `${stickyWidth}px` }}>
+                                            {timeline.items.map((item, idx) => (
+                                                <div key={idx} className={`flex-shrink-0 box-border h-full
+                                                    ${isFourWeekView && viewMode === 'day'
+                                                        ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
+                                                        : viewMode === 'week'
+                                                            ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-transparent'}`
+                                                            : 'border-r border-dashed border-gray-300/60'}
+                                                    ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/45' : item.getDay() === 0 ? 'bg-red-50/45' : '') : ''}
+                                                    ${viewMode === 'day' && isToday(item) ? 'bg-blue-50/20' : ''}`}
+                                                    style={{ width: config.cellWidth }} />
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="relative z-[1]" style={isExportingPdf ? undefined : { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${offsetY}px)` }}>
+                                        {(isExportingPdf ? virtualData.rows : visibleRows).map((row) => {
+                                            if (row.type === 'category') {
+                                                const { category, catData } = row;
+                                                return (
+                                                    <CategoryRow
+                                                        key={row.id}
+                                                        category={category}
+                                                        catData={catData}
+                                                        collapsedCategories={collapsedCategories}
+                                                        toggleCategory={toggleCategory}
+                                                        categoryColors={categoryColors}
+                                                        setActiveColorMenu={setActiveColorMenu}
+                                                        onAddTaskToCategory={onAddTaskToCategory}
+                                                        visibleColumns={visibleColumns}
+                                                        stickyWidth={stickyWidth}
+                                                        employeeColumnWidth={EMPLOYEE_COL_WIDTH}
+                                                        timeline={timeline}
+                                                        config={config}
+                                                        viewMode={viewMode}
+                                                        isFourWeekView={isFourWeekView}
+                                                        isProcurementMode={isProcurementMode}
+                                                        timeRange={timeRange}
+                                                        getTaskWeight={getTaskWeight}
+                                                        onCategoryDragStart={handleCategoryDragStart}
+                                                        onCategoryDragOver={handleCategoryDragOver}
+                                                        onCategoryDrop={handleCategoryDrop}
+                                                        isDragging={categoryDragState?.id === category && categoryDragState?.type === 'category'}
+                                                        loadingIds={effectiveLoadingIds}
+                                                    />
+                                                );
+                                            }
 
-                                        if (row.type === 'subcategory') {
-                                            const { category, subcategory: subcat, subData, id: uniqueSubcatId } = row;
-                                            const color = categoryColors[uniqueSubcatId] || categoryColors[category] || '#3b82f6';
-                                            const subTasks = [
-                                                ...subData.tasks,
-                                                ...Object.values(subData.subsubcategories).flat()
-                                            ] as Task[];
-                                            const subSummary = getCategorySummary(subTasks, getTaskWeight);
-                                            const subDateRange = subSummary.dateRange;
-                                            const isSubCollapsed = collapsedSubcategories.has(uniqueSubcatId);
+                                            if (row.type === 'subcategory') {
+                                                const { category, subcategory: subcat, subData, id: uniqueSubcatId } = row;
+                                                const color = categoryColors[uniqueSubcatId] || categoryColors[category] || '#3b82f6';
+                                                const subTasks = [
+                                                    ...subData.tasks,
+                                                    ...Object.values(subData.subsubcategories).flat()
+                                                ] as Task[];
+                                                const subSummary = getCategorySummary(subTasks, getTaskWeight);
+                                                const subDateRange = subSummary.dateRange;
+                                                const isSubCollapsed = collapsedSubcategories.has(uniqueSubcatId);
 
-                                            return (
-                                                <div key={row.id}>
-                                                    {/* Subcategory Header */}
-                                                    <div
-                                                        className={`flex bg-white border-b border-dashed border-gray-200 h-8 group hover:bg-slate-50 transition-colors ${categoryDragState?.id === uniqueSubcatId && categoryDragState?.type === 'subcategory' ? 'opacity-40 bg-blue-50' : ''}`}
-                                                        draggable={enabledGroupDragId === uniqueSubcatId}
-                                                        onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubcatId, 'subcategory')}
-                                                        onDragOver={handleCategoryDragOver}
-                                                        onDrop={(e) => rowDragState
-                                                            ? handleTaskDropToSubcategory(e, category, subcat)
-                                                            : handleSubcategoryDrop(e, uniqueSubcatId)}
-                                                        onDragEnd={() => setEnabledGroupDragId(null)}
-                                                    >
-                                                        <div className="sticky left-0 z-[60] h-full bg-white group-hover:bg-slate-50 border-r border-gray-300 pl-2 flex items-center"
-                                                            style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px`, paddingLeft: '24px' }}>
-                                                            {/* Drag Handle */}
-                                                            <button
-                                                                type="button"
-                                                                className="cursor-grab text-gray-400 hover:text-gray-600 mr-1"
-                                                                title="Move Subcategory"
-                                                                onMouseDown={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setEnabledGroupDragId(uniqueSubcatId);
-                                                                }}
-                                                                onMouseUp={() => setEnabledGroupDragId(null)}
-                                                                onTouchStart={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setEnabledGroupDragId(uniqueSubcatId);
-                                                                }}
-                                                                onTouchEnd={() => setEnabledGroupDragId(null)}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6h8v2H8V6zm0 4h8v2H8v-2zm0 4h8v2H8v-2z" /></svg>
-                                                            </button>
+                                                return (
+                                                    <div key={row.id}>
+                                                        {/* Subcategory Header */}
+                                                        <div
+                                                            className={`flex bg-white [.is-pdf-exporting_&]:bg-transparent border-b border-dashed border-gray-200 h-8 group hover:bg-slate-50 transition-colors ${categoryDragState?.id === uniqueSubcatId && categoryDragState?.type === 'subcategory' ? 'opacity-40 bg-blue-50' : ''}`}
+                                                            draggable={enabledGroupDragId === uniqueSubcatId}
+                                                            onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubcatId, 'subcategory')}
+                                                            onDragOver={handleCategoryDragOver}
+                                                            onDrop={(e) => rowDragState
+                                                                ? handleTaskDropToSubcategory(e, category, subcat)
+                                                                : handleSubcategoryDrop(e, uniqueSubcatId)}
+                                                            onDragEnd={() => setEnabledGroupDragId(null)}
+                                                        >
+                                                            <div className="sticky left-0 z-[60] h-full bg-white group-hover:bg-slate-50 border-r border-gray-300 pl-2 flex items-center"
+                                                                style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px`, paddingLeft: '24px' }}>
+                                                                {/* Drag Handle */}
+                                                                <button
+                                                                    type="button"
+                                                                    className="cursor-grab text-gray-400 hover:text-gray-600 mr-1"
+                                                                    title="Move Subcategory"
+                                                                    onMouseDown={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEnabledGroupDragId(uniqueSubcatId);
+                                                                    }}
+                                                                    onMouseUp={() => setEnabledGroupDragId(null)}
+                                                                    onTouchStart={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEnabledGroupDragId(uniqueSubcatId);
+                                                                    }}
+                                                                    onTouchEnd={() => setEnabledGroupDragId(null)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6h8v2H8V6zm0 4h8v2H8v-2zm0 4h8v2H8v-2z" /></svg>
+                                                                </button>
 
-                                                            <button
-                                                                className="w-4 h-4 mr-1 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleSubcategory(uniqueSubcatId);
-                                                                }}
-                                                                title={isSubCollapsed ? 'Expand children' : 'Collapse children'}
-                                                            >
-                                                                {isSubCollapsed ? (
-                                                                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z" /></svg>
-                                                                ) : (
-                                                                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5 7l5 6 5-6H5z" /></svg>
-                                                                )}
-                                                            </button>
+                                                                <button
+                                                                    className="w-4 h-4 mr-1 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        toggleSubcategory(uniqueSubcatId);
+                                                                    }}
+                                                                    title={isSubCollapsed ? 'Expand children' : 'Collapse children'}
+                                                                >
+                                                                    {isSubCollapsed ? (
+                                                                        <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z" /></svg>
+                                                                    ) : (
+                                                                        <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5 7l5 6 5-6H5z" /></svg>
+                                                                    )}
+                                                                </button>
 
-                                                            {/* Color Picker for Subcategory */}
-                                                            <button
-                                                                className="w-2.5 h-2.5 rounded-full border border-gray-300 hover:scale-110 transition-transform shadow-sm flex-shrink-0 mr-2"
-                                                                style={{ backgroundColor: color }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const rect = e.currentTarget.getBoundingClientRect();
-                                                                    setActiveColorMenu({
-                                                                        id: uniqueSubcatId,
-                                                                        type: 'category',
-                                                                        top: rect.bottom + window.scrollY,
-                                                                        left: rect.left + window.scrollX
-                                                                    });
-                                                                }}
-                                                                title="Change Subcategory Color"
-                                                            />
+                                                                {/* Color Picker for Subcategory */}
+                                                                <button
+                                                                    className="w-2.5 h-2.5 rounded-full border border-gray-300 hover:scale-110 transition-transform shadow-sm flex-shrink-0 mr-2"
+                                                                    style={{ backgroundColor: color }}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                        setActiveColorMenu({
+                                                                            id: uniqueSubcatId,
+                                                                            type: 'category',
+                                                                            top: rect.bottom + window.scrollY,
+                                                                            left: rect.left + window.scrollX
+                                                                        });
+                                                                    }}
+                                                                    title="Change Subcategory Color"
+                                                                />
 
-                                                            <div className="h-full flex-1 flex items-stretch overflow-hidden">
-                                                                <div className="h-full flex-1 flex items-center min-w-0 pr-2">
-                                                                    <div className="font-semibold text-xs text-gray-800 truncate" style={{ color: color }}>
-                                                                        {subcat}
+                                                                <div className="h-full flex-1 flex items-stretch overflow-hidden">
+                                                                    <div className="h-full flex-1 flex items-center min-w-0 pr-2">
+                                                                        <div className="font-semibold text-xs text-gray-800 truncate" style={{ color: color }}>
+                                                                            {subcat}
+                                                                        </div>
+                                                                        {onAddTaskToCategory && (
+                                                                            <button
+                                                                                className="ml-2 p-0.5 hover:bg-blue-100 rounded-sm text-blue-500 opacity-0 group-hover:opacity-100 shrink-0 ease-in-out duration-200"
+                                                                                onClick={(e) => { e.stopPropagation(); onAddTaskToCategory(category, subcat); }}
+                                                                                title="Add Task to Subcategory"
+                                                                            >
+                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                                                            </button>
+                                                                        )}
                                                                     </div>
-                                                                    {onAddTaskToCategory && (
-                                                                        <button
-                                                                            className="ml-2 p-0.5 hover:bg-blue-100 rounded-sm text-blue-500 opacity-0 group-hover:opacity-100 shrink-0 ease-in-out duration-200"
-                                                                            onClick={(e) => { e.stopPropagation(); onAddTaskToCategory(category, subcat); }}
-                                                                            title="Add Task to Subcategory"
-                                                                        >
-                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                                                        </button>
+
+                                                                    {/* Subcategory Summary Cols */}
+                                                                    {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-[100px] shrink-0 pr-2 truncate">{(subSummary.totalCost || 0).toLocaleString()}</div>}
+                                                                    {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-[70px] shrink-0 pr-2 truncate">{(subSummary.totalWeight || 0).toFixed(2)}%</div>}
+                                                                    {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[100px] shrink-0 text-left pl-2 truncate"></div>}
+                                                                    {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[170px] shrink-0 text-[10px] text-gray-600 font-mono text-left pl-2 truncate">
+                                                                        {subDateRange ? formatDateRange(subDateRange.start, subDateRange.end) : '-'}
+                                                                    </div>}
+                                                                    {visibleColumns.team && (
+                                                                        <div
+                                                                            className="h-full flex items-center justify-center border-l border-gray-300/40 shrink-0"
+                                                                            style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
+                                                                        />
                                                                     )}
+                                                                    {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-300/40 text-xs text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subSummary.avgProgress || 0).toFixed(0)}%</div>}
                                                                 </div>
-
-                                                                {/* Subcategory Summary Cols */}
-                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-[100px] shrink-0 pr-2 truncate">{(subSummary.totalCost || 0).toLocaleString()}</div>}
-                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-xs text-gray-900 font-bold font-mono w-[70px] shrink-0 pr-2 truncate">{(subSummary.totalWeight || 0).toFixed(2)}%</div>}
-                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[100px] shrink-0 text-left pl-2 truncate"></div>}
-                                                                {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[150px] shrink-0 text-[10px] text-gray-600 font-mono text-left pl-2 truncate">
-                                                                    {subDateRange ? formatDateRange(subDateRange.start, subDateRange.end) : '-'}
-                                                                </div>}
-                                                                {visibleColumns.team && (
-                                                                    <div
-                                                                        className="h-full flex items-center justify-center border-l border-gray-300/40 shrink-0"
-                                                                        style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
-                                                                    />
-                                                                )}
-                                                                {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-300/40 text-xs text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subSummary.avgProgress || 0).toFixed(0)}%</div>}
                                                             </div>
-                                                        </div>
 
-                                                        {/* Styled Timeline Bar for Subcategory */}
-                                                        <div
-                                                            className="flex-none h-full relative overflow-hidden bg-white border-l border-gray-300/90"
-                                                            style={{ width: `${timeline.items.length * config.cellWidth}px`, minWidth: `${timeline.items.length * config.cellWidth}px` }}
-                                                        >
-                                                            <div className="absolute inset-0 flex pointer-events-none">
-                                                                {timeline.items.map((item, idx) => (
-                                                                    <div key={idx} className={`flex-shrink-0 box-border h-full
+                                                            {/* Styled Timeline Bar for Subcategory */}
+                                                            <div
+                                                                className="flex-none h-full relative overflow-hidden bg-white [.is-pdf-exporting_&]:bg-transparent border-l border-gray-300/90"
+                                                                style={{ width: `${timeline.items.length * config.cellWidth}px`, minWidth: `${timeline.items.length * config.cellWidth}px` }}
+                                                            >
+                                                                <div className="absolute inset-0 flex pointer-events-none">
+                                                                    {timeline.items.map((item, idx) => (
+                                                                        <div key={idx} className={`flex-shrink-0 box-border h-full
                                                                         ${isFourWeekView && viewMode === 'day'
-                                                                            ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
-                                                                            : viewMode === 'week'
-                                                                                ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                                                                : 'border-r border-dashed border-gray-300/60'}
+                                                                                ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
+                                                                                : viewMode === 'week'
+                                                                                    ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                                                                    : 'border-r border-dashed border-gray-300/60'}
                                                                         ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/35' : item.getDay() === 0 ? 'bg-red-50/35' : '') : ''}`}
-                                                                        style={{ width: config.cellWidth }} />
-                                                                ))}
-                                                            </div>
-
-                                                            {subDateRange && (
-                                                                <div
-                                                                    className="absolute h-3 top-[10px] rounded-full border border-gray-400/30"
-                                                                    style={{
-                                                                        ...getCategoryBarStyle(subDateRange, viewMode, config, timeRange),
-                                                                        backgroundColor: `${color}30`,
-                                                                        zIndex: 20
-                                                                    }}
-                                                                >
-                                                                    <div
-                                                                        className="absolute left-0 top-0 bottom-0 rounded-full"
-                                                                        style={{
-                                                                            width: `${subSummary.avgProgress}%`,
-                                                                            backgroundColor: color,
-                                                                            opacity: 0.7
-                                                                        }}
-                                                                    />
+                                                                            style={{ width: config.cellWidth }} />
+                                                                    ))}
                                                                 </div>
-                                                            )}
+
+                                                                {subDateRange && (
+                                                                    <div
+                                                                        className="absolute h-3 top-[10px] rounded-full border border-gray-400/30"
+                                                                        style={{
+                                                                            ...getCategoryBarStyle(subDateRange, viewMode, config, timeRange),
+                                                                            backgroundColor: `${color}30`,
+                                                                            zIndex: 20
+                                                                        }}
+                                                                    >
+                                                                        <div
+                                                                            className="absolute left-0 top-0 bottom-0 rounded-full"
+                                                                            style={{
+                                                                                width: `${subSummary.avgProgress}%`,
+                                                                                backgroundColor: color,
+                                                                                opacity: 0.7
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        }
+                                                );
+                                            }
 
-                                        if (row.type === 'subsubcategory') {
-                                            const { category, subcategory: subcat, subsubcategory: subsub, tasks, id: uniqueSubsubId } = row;
-                                            // Color reuse from parent subcat logic? 
-                                            // Need to resolve color again.
-                                            const parentSubcatId = `${category}::${subcat}`;
-                                            const parentColor = categoryColors[parentSubcatId] || categoryColors[category] || '#3b82f6';
-                                            const subColor = categoryColors[uniqueSubsubId] || parentColor;
-                                            const subsubSummary = getCategorySummary(tasks, getTaskWeight);
-                                            const subsubDateRange = subsubSummary.dateRange;
-                                            const isSubsubCollapsed = collapsedSubcategories.has(uniqueSubsubId);
+                                            if (row.type === 'subsubcategory') {
+                                                const { category, subcategory: subcat, subsubcategory: subsub, tasks, id: uniqueSubsubId } = row;
+                                                // Color reuse from parent subcat logic? 
+                                                // Need to resolve color again.
+                                                const parentSubcatId = `${category}::${subcat}`;
+                                                const parentColor = categoryColors[parentSubcatId] || categoryColors[category] || '#3b82f6';
+                                                const subColor = categoryColors[uniqueSubsubId] || parentColor;
+                                                const subsubSummary = getCategorySummary(tasks, getTaskWeight);
+                                                const subsubDateRange = subsubSummary.dateRange;
+                                                const isSubsubCollapsed = collapsedSubcategories.has(uniqueSubsubId);
 
-                                            return (
-                                                <div key={row.id}>
-                                                    <div
-                                                        className="h-8 flex items-center bg-white border-b border-dotted border-gray-100 group hover:bg-slate-50 transition-colors"
-                                                        draggable={enabledGroupDragId === uniqueSubsubId}
-                                                        onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubsubId, 'subsubcategory')}
-                                                        onDragOver={handleCategoryDragOver}
-                                                        onDrop={(e) => rowDragState
-                                                            ? handleTaskDropToSubsubcategory(e, category, subcat, subsub)
-                                                            : handleSubcategoryDrop(e, uniqueSubsubId)}
-                                                        onDragEnd={() => setEnabledGroupDragId(null)}
-                                                    >
-                                                        <div className="sticky left-0 z-[59] h-full flex items-center border-r border-gray-300 pl-2 bg-white group-hover:bg-slate-50"
-                                                            style={{ width: stickyWidth, minWidth: stickyWidth, paddingLeft: 40 }}>
-                                                            <button
-                                                                type="button"
-                                                                className="cursor-grab text-gray-400 hover:text-gray-600 mr-1"
-                                                                title="Move Sub-subcategory"
-                                                                onMouseDown={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setEnabledGroupDragId(uniqueSubsubId);
-                                                                }}
-                                                                onMouseUp={() => setEnabledGroupDragId(null)}
-                                                                onTouchStart={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setEnabledGroupDragId(uniqueSubsubId);
-                                                                }}
-                                                                onTouchEnd={() => setEnabledGroupDragId(null)}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6h8v2H8V6zm0 4h8v2H8v-2zm0 4h8v2H8v-2z" /></svg>
-                                                            </button>
-                                                            <button
-                                                                className="w-4 h-4 mr-1 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleSubcategory(uniqueSubsubId);
-                                                                }}
-                                                                title={isSubsubCollapsed ? 'Expand children' : 'Collapse children'}
-                                                            >
-                                                                {isSubsubCollapsed ? (
-                                                                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z" /></svg>
-                                                                ) : (
-                                                                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5 7l5 6 5-6H5z" /></svg>
-                                                                )}
-                                                            </button>
-
-                                                            <button
-                                                                className="w-2 h-2 rounded-full border border-gray-300 hover:scale-110 transition-transform shadow-sm flex-shrink-0 mr-2"
-                                                                style={{ backgroundColor: subColor }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const rect = e.currentTarget.getBoundingClientRect();
-                                                                    setActiveColorMenu({
-                                                                        id: uniqueSubsubId,
-                                                                        type: 'category',
-                                                                        top: rect.bottom + window.scrollY,
-                                                                        left: rect.left + window.scrollX
-                                                                    });
-                                                                }}
-                                                                title="Change Sub-subcategory Color"
-                                                            />
-
-                                                            <div className="h-full flex-1 flex items-stretch overflow-hidden">
-                                                                <div className="h-full flex-1 flex items-center min-w-0 pr-2">
-                                                                    <span className="text-[11px] text-gray-600 font-bold italic truncate">{subsub}</span>
-
-                                                                    {onAddTaskToCategory && (
-                                                                        <button
-                                                                            className="ml-2 p-0.5 text-blue-400 hover:text-blue-600 bg-transparent hover:bg-blue-50 rounded opacity-0 group-hover:opacity-100 shrink-0 ease-in-out duration-200"
-                                                                            onClick={(e) => { e.stopPropagation(); onAddTaskToCategory(category, subcat, subsub); }}
-                                                                            title="Add Task to Sub-subcategory"
-                                                                        >
-                                                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-
-                                                                {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-[100px] shrink-0 pr-2 truncate">{(subsubSummary.totalCost || 0).toLocaleString()}</div>}
-                                                                {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-[70px] shrink-0 pr-2 truncate">{(subsubSummary.totalWeight || 0).toFixed(2)}%</div>}
-                                                                {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[100px] shrink-0 text-left pl-2 truncate"></div>}
-                                                                {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {isProcurementMode && visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
-                                                                {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[150px] shrink-0 text-[9px] text-gray-500 font-mono text-left pl-2 truncate">
-                                                                    {subsubDateRange ? formatDateRange(subsubDateRange.start, subsubDateRange.end) : '-'}
-                                                                </div>}
-                                                                {visibleColumns.team && (
-                                                                    <div
-                                                                        className="h-full flex items-center justify-center border-l border-gray-300/40 shrink-0"
-                                                                        style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
-                                                                    />
-                                                                )}
-                                                                {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-300/40 text-[10px] text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subsubSummary.avgProgress || 0).toFixed(0)}%</div>}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Timeline Bar for SubSub */}
+                                                return (
+                                                    <div key={row.id}>
                                                         <div
-                                                            className="flex-none h-full relative overflow-hidden bg-white border-l border-gray-300/90"
-                                                            style={{ width: `${timeline.items.length * config.cellWidth}px`, minWidth: `${timeline.items.length * config.cellWidth}px` }}
+                                                            className="h-8 flex items-center bg-white [.is-pdf-exporting_&]:bg-transparent border-b border-dotted border-gray-100 group hover:bg-slate-50 transition-colors"
+                                                            draggable={enabledGroupDragId === uniqueSubsubId}
+                                                            onDragStart={(e) => handleSubcategoryDragStart(e, uniqueSubsubId, 'subsubcategory')}
+                                                            onDragOver={handleCategoryDragOver}
+                                                            onDrop={(e) => rowDragState
+                                                                ? handleTaskDropToSubsubcategory(e, category, subcat, subsub)
+                                                                : handleSubcategoryDrop(e, uniqueSubsubId)}
+                                                            onDragEnd={() => setEnabledGroupDragId(null)}
                                                         >
-                                                            <div className="absolute inset-0 flex pointer-events-none">
-                                                                {timeline.items.map((item, idx) => (
-                                                                    <div key={idx} className={`flex-shrink-0 box-border h-full
-                                                                        ${isFourWeekView && viewMode === 'day'
-                                                                            ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
-                                                                            : viewMode === 'week'
-                                                                                ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
-                                                                                : 'border-r border-dashed border-gray-300/60'}
-                                                                        ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/30' : item.getDay() === 0 ? 'bg-red-50/30' : '') : ''}`}
-                                                                        style={{ width: config.cellWidth }} />
-                                                                ))}
+                                                            <div className="sticky left-0 z-[59] h-full flex items-center border-r border-gray-300 pl-2 bg-white [.is-pdf-exporting_&]:bg-transparent group-hover:bg-slate-50"
+                                                                style={{ width: stickyWidth, minWidth: stickyWidth, paddingLeft: 40 }}>
+                                                                <button
+                                                                    type="button"
+                                                                    className="cursor-grab text-gray-400 hover:text-gray-600 mr-1"
+                                                                    title="Move Sub-subcategory"
+                                                                    onMouseDown={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEnabledGroupDragId(uniqueSubsubId);
+                                                                    }}
+                                                                    onMouseUp={() => setEnabledGroupDragId(null)}
+                                                                    onTouchStart={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEnabledGroupDragId(uniqueSubsubId);
+                                                                    }}
+                                                                    onTouchEnd={() => setEnabledGroupDragId(null)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6h8v2H8V6zm0 4h8v2H8v-2zm0 4h8v2H8v-2z" /></svg>
+                                                                </button>
+                                                                <button
+                                                                    className="w-4 h-4 mr-1 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        toggleSubcategory(uniqueSubsubId);
+                                                                    }}
+                                                                    title={isSubsubCollapsed ? 'Expand children' : 'Collapse children'}
+                                                                >
+                                                                    {isSubsubCollapsed ? (
+                                                                        <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z" /></svg>
+                                                                    ) : (
+                                                                        <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5 7l5 6 5-6H5z" /></svg>
+                                                                    )}
+                                                                </button>
+
+                                                                <button
+                                                                    className="w-2 h-2 rounded-full border border-gray-300 hover:scale-110 transition-transform shadow-sm flex-shrink-0 mr-2"
+                                                                    style={{ backgroundColor: subColor }}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                        setActiveColorMenu({
+                                                                            id: uniqueSubsubId,
+                                                                            type: 'category',
+                                                                            top: rect.bottom + window.scrollY,
+                                                                            left: rect.left + window.scrollX
+                                                                        });
+                                                                    }}
+                                                                    title="Change Sub-subcategory Color"
+                                                                />
+
+                                                                <div className="h-full flex-1 flex items-stretch overflow-hidden">
+                                                                    <div className="h-full flex-1 flex items-center min-w-0 pr-2">
+                                                                        <span className="text-[11px] text-gray-600 font-bold italic truncate">{subsub}</span>
+
+                                                                        {onAddTaskToCategory && (
+                                                                            <button
+                                                                                className="ml-2 p-0.5 text-blue-400 hover:text-blue-600 bg-transparent hover:bg-blue-50 rounded opacity-0 group-hover:opacity-100 shrink-0 ease-in-out duration-200"
+                                                                                onClick={(e) => { e.stopPropagation(); onAddTaskToCategory(category, subcat, subsub); }}
+                                                                                title="Add Task to Sub-subcategory"
+                                                                            >
+                                                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {visibleColumns.cost && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-[100px] shrink-0 pr-2 truncate">{(subsubSummary.totalCost || 0).toLocaleString()}</div>}
+                                                                    {visibleColumns.weight && <div className="h-full flex items-center justify-end border-l border-gray-300/40 text-[10px] text-gray-900 font-bold font-mono w-[70px] shrink-0 pr-2 truncate">{(subsubSummary.totalWeight || 0).toFixed(2)}%</div>}
+                                                                    {visibleColumns.quantity && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[100px] shrink-0 text-left pl-2 truncate"></div>}
+                                                                    {isProcurementMode && visibleColumns.dueProcurement && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.dueMaterialOnSite && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.dateOfUse && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[78px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.duration && <div className="h-full flex items-center justify-end border-l border-gray-300/40 w-[62px] shrink-0 text-right pr-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {isProcurementMode && visibleColumns.procurementStatus && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[96px] shrink-0 text-left pl-2 text-[10px] text-gray-500 truncate">-</div>}
+                                                                    {visibleColumns.period && <div className="h-full flex items-center justify-start border-l border-gray-300/40 w-[170px] shrink-0 text-[9px] text-gray-500 font-mono text-left pl-2 truncate">
+                                                                        {subsubDateRange ? formatDateRange(subsubDateRange.start, subsubDateRange.end) : '-'}
+                                                                    </div>}
+                                                                    {visibleColumns.team && (
+                                                                        <div
+                                                                            className="h-full flex items-center justify-center border-l border-gray-300/40 shrink-0"
+                                                                            style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }}
+                                                                        />
+                                                                    )}
+                                                                    {visibleColumns.progress && <div className="h-full flex items-center justify-start border-l border-gray-300/40 text-[10px] text-blue-700 font-bold font-mono w-20 shrink-0 pl-2 truncate">{(subsubSummary.avgProgress || 0).toFixed(0)}%</div>}
+                                                                </div>
                                                             </div>
 
-                                                            {subsubDateRange && (
-                                                                <div
-                                                                    className="absolute h-2.5 top-[11px] rounded-full border border-gray-400/20"
-                                                                    style={{
-                                                                        ...getCategoryBarStyle(subsubDateRange, viewMode, config, timeRange),
-                                                                        backgroundColor: `${subColor}20`,
-                                                                        zIndex: 10
-                                                                    }}
-                                                                >
-                                                                    <div
-                                                                        className="absolute left-0 top-0 bottom-0 rounded-full"
-                                                                        style={{
-                                                                            width: `${subsubSummary.avgProgress}%`,
-                                                                            backgroundColor: subColor,
-                                                                            opacity: 0.6
-                                                                        }}
-                                                                    />
+                                                            {/* Timeline Bar for SubSub */}
+                                                            <div
+                                                                className="flex-none h-full relative overflow-hidden bg-white [.is-pdf-exporting_&]:bg-transparent border-l border-gray-300/90"
+                                                                style={{ width: `${timeline.items.length * config.cellWidth}px`, minWidth: `${timeline.items.length * config.cellWidth}px` }}
+                                                            >
+                                                                <div className="absolute inset-0 flex pointer-events-none">
+                                                                    {timeline.items.map((item, idx) => (
+                                                                        <div key={idx} className={`flex-shrink-0 box-border h-full
+                                                                        ${isFourWeekView && viewMode === 'day'
+                                                                                ? `${Math.floor(idx / 7) % 4 === 0 ? 'bg-sky-50' : Math.floor(idx / 7) % 4 === 1 ? 'bg-rose-50' : Math.floor(idx / 7) % 4 === 2 ? 'bg-emerald-50' : 'bg-violet-50'} border-r border-slate-300/35`
+                                                                                : viewMode === 'week'
+                                                                                    ? `border-r border-slate-300 ${idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}`
+                                                                                    : 'border-r border-dashed border-gray-300/60'}
+                                                                        ${viewMode === 'day' && !isFourWeekView ? (item.getDay() === 6 ? 'bg-violet-50/30' : item.getDay() === 0 ? 'bg-red-50/30' : '') : ''}`}
+                                                                            style={{ width: config.cellWidth }} />
+                                                                    ))}
                                                                 </div>
-                                                            )}
+
+                                                                {subsubDateRange && (
+                                                                    <div
+                                                                        className="absolute h-2.5 top-[11px] rounded-full border border-gray-400/20"
+                                                                        style={{
+                                                                            ...getCategoryBarStyle(subsubDateRange, viewMode, config, timeRange),
+                                                                            backgroundColor: `${subColor}20`,
+                                                                            zIndex: 10
+                                                                        }}
+                                                                    >
+                                                                        <div
+                                                                            className="absolute left-0 top-0 bottom-0 rounded-full"
+                                                                            style={{
+                                                                                width: `${subsubSummary.avgProgress}%`,
+                                                                                backgroundColor: subColor,
+                                                                                opacity: 0.6
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        }
+                                                );
+                                            }
 
-                                        if (row.type === 'task') {
-                                            const { task: t, level } = row;
-                                            return (
-                                                <TaskRow
-                                                    key={t.id}
-                                                    task={t}
-                                                    level={level}
-                                                    tasks={optimisticTasks}
-                                                    config={config}
-                                                    viewMode={viewMode}
-                                                    isFourWeekView={isFourWeekView}
-                                                    isProcurementMode={isProcurementMode}
-                                                    procurementOffsets={procurementOffsets}
-                                                    timeRange={timeRange}
-                                                    visibleColumns={visibleColumns}
-                                                    stickyWidth={stickyWidth}
-                                                    timeline={timeline}
-                                                    collapsedTasks={collapsedTasks}
-                                                    dragState={dragState}
-                                                    rowDragState={rowDragState}
-                                                    dropTargetId={dropTargetId}
-                                                    dropPosition={dropPosition}
-                                                    isUpdating={isDragUpdating}
-                                                    showDependencies={showDependencies}
-                                                    dependencySource={dependencySource}
-                                                    getTaskWeight={getTaskWeight}
-                                                    hasChildren={hasChildren}
-                                                    getChildTasks={getChildTasks}
-                                                    onTaskUpdate={onTaskUpdate}
-                                                    onAddSubTask={onAddSubTask}
-                                                    toggleTaskCollapse={toggleTaskCollapse}
-                                                    handleRowDragStart={handleRowDragStart}
-                                                    handleRowDragOver={handleRowDragOver}
-                                                    handleRowDragLeave={handleRowDragLeave}
-                                                    handleRowDrop={handleRowDrop}
-                                                    handleRowDragEnd={handleRowDragEnd}
-                                                    handleRemoveFromParent={handleRemoveFromParent}
-                                                    setActiveColorMenu={setActiveColorMenu}
-                                                    handleDependencyClick={handleDependencyClick}
-                                                    setModalConfig={setModalConfig}
-                                                    startDrag={startDrag}
-                                                    loadingIds={effectiveLoadingIds}
-                                                    employees={employees}
-                                                />
-                                            );
-                                        }
-                                        return null;
-                                    })}
+                                            if (row.type === 'task') {
+                                                const { task: t, level } = row;
+                                                return (
+                                                    <TaskRow
+                                                        key={t.id}
+                                                        task={t}
+                                                        level={level}
+                                                        tasks={optimisticTasks}
+                                                        config={config}
+                                                        viewMode={viewMode}
+                                                        isFourWeekView={isFourWeekView}
+                                                        isProcurementMode={isProcurementMode}
+                                                        procurementOffsets={procurementOffsets}
+                                                        timeRange={timeRange}
+                                                        visibleColumns={visibleColumns}
+                                                        stickyWidth={stickyWidth}
+                                                        timeline={timeline}
+                                                        collapsedTasks={collapsedTasks}
+                                                        dragState={dragState}
+                                                        rowDragState={rowDragState}
+                                                        dropTargetId={dropTargetId}
+                                                        dropPosition={dropPosition}
+                                                        isUpdating={isDragUpdating}
+                                                        showDependencies={showDependencies}
+                                                        dependencySource={dependencySource}
+                                                        getTaskWeight={getTaskWeight}
+                                                        hasChildren={hasChildren}
+                                                        getChildTasks={getChildTasks}
+                                                        onTaskUpdate={onTaskUpdate}
+                                                        onAddSubTask={onAddSubTask}
+                                                        toggleTaskCollapse={toggleTaskCollapse}
+                                                        handleRowDragStart={handleRowDragStart}
+                                                        handleRowDragOver={handleRowDragOver}
+                                                        handleRowDragLeave={handleRowDragLeave}
+                                                        handleRowDrop={handleRowDrop}
+                                                        handleRowDragEnd={handleRowDragEnd}
+                                                        handleRemoveFromParent={handleRemoveFromParent}
+                                                        setActiveColorMenu={setActiveColorMenu}
+                                                        handleDependencyClick={handleDependencyClick}
+                                                        setModalConfig={setModalConfig}
+                                                        startDrag={startDrag}
+                                                        loadingIds={effectiveLoadingIds}
+                                                        employees={employees}
+                                                    />
+                                                );
+                                            }
+                                            return null;
+                                        })}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* TOTAL FOOTER BAR - Restored */}
-            <div className="flex-shrink-0 bg-gray-100 border-t border-gray-300 z-[80] shadow-[0_-2px_10px_rgba(0,0,0,0.05)] font-mono text-xs">
-                <div className="flex h-10 items-center">
-                    {/* Fixed Left Section */}
-                    <div className="sticky left-0 bg-gray-100 border-r border-gray-300 flex items-center px-4 font-bold text-gray-800 z-20"
-                        style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}>
-                        <div className="flex-1">TOTAL</div>
+                    {/* S-Curve Full-Height Overlay */}
+                    {showSCurveOverlay && (containerHeight > 0 || isExportingPdf) && (() => {
+                        const { points } = computeSCurveData({
+                            tasks: optimisticTasks,
+                            timeRange,
+                            mode: 'physical'
+                        });
 
-                        {visibleColumns.cost && (
-                            <div className="w-20 text-right shrink-0 text-blue-800">
-                                {summaryStats.cost.toLocaleString()}
-                            </div>
-                        )}
-                        {visibleColumns.weight && (
-                            <div className="w-14 text-right shrink-0">
-                                100%
-                            </div>
-                        )}
-                        {/* Spacer for other cols */}
-                        {visibleColumns.quantity && <div className="w-16 shrink-0" />}
-                        {visibleColumns.dueProcurement && <div className="w-[78px] shrink-0" />}
-                        {visibleColumns.dueMaterialOnSite && <div className="w-[78px] shrink-0" />}
-                        {visibleColumns.dateOfUse && <div className="w-[78px] shrink-0" />}
-                        {visibleColumns.duration && <div className="w-[62px] shrink-0" />}
-                        {visibleColumns.procurementStatus && <div className="w-[96px] shrink-0" />}
-                        {visibleColumns.period && <div className="w-[150px] shrink-0" />}
-                        {visibleColumns.team && (
-                            <div className="shrink-0" style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }} />
-                        )}
+                        if (!points || points.length === 0) return null;
 
-                        {visibleColumns.progress && (
-                            <div className="w-20 text-right shrink-0 pr-1 flex items-center justify-end gap-2">
-                                <span className="text-gray-500 text-[10px]">ACTUAL:</span>
-                                <span className={`text-sm ${summaryStats.progress >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
-                                    {summaryStats.progress.toFixed(2)}%
-                                </span>
-                            </div>
-                        )}
-                    </div>
+                        const timelineWidth = timeline.items.length * config.cellWidth;
+                        const HEADER_HEIGHT = 50; 
+                        const PADDING_TOP = 20;
+                        const PADDING_BOTTOM = 40;
+                        
+                        const actualContainerHeight = (isExportingPdf && scrollContainerRef.current) 
+                            ? scrollContainerRef.current.scrollHeight 
+                            : containerHeight;
+                            
+                        const drawHeight = actualContainerHeight - HEADER_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
-                    {/* Timeline Footer (Optional: could show projected bars) */}
-                    <div className="flex-1 bg-gray-50 text-gray-400 flex items-center justify-center italic text-[10px]">
-                        Overall Project Status
-                    </div>
-                </div>
-            </div>
+                        if (drawHeight <= 0) return null;
 
-            {/* Global Confirm Modal (optional, if using setModalConfig) */}
-            {modalConfig.isOpen && (
-                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">{modalConfig.title}</h3>
-                        <p className="text-gray-600 mb-6">{modalConfig.message}</p>
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={() => setModalConfig({ ...modalConfig, isOpen: false })}
-                                className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                        // Coordinate mapping
+                        const getX = (date: Date) => {
+                            const dayOffset = differenceInDays(date, timeRange.start);
+                            if (viewMode === 'day') return dayOffset * config.cellWidth;
+                            if (viewMode === 'week') return (dayOffset / 7) * config.cellWidth;
+                            return (dayOffset / 30.44) * config.cellWidth;
+                        };
+                        const getY = (val: number) => HEADER_HEIGHT + PADDING_TOP + drawHeight - (val / 100) * drawHeight;
+
+                        const planPointsStr = points.map(p => `${getX(p.date)},${getY(p.plan)}`).join(' ');
+                        const now = new Date();
+                        const actualPoints = points.filter(p => isBefore(p.date, now) || isToday(p.date) || p.actual > 0);
+                        const actualPointsStr = actualPoints.map(p => `${getX(p.date)},${getY(p.actual)}`).join(' ');
+
+                        const yLabels = [0, 25, 50, 75, 100];
+
+                        return (
+                            <div
+                                className="absolute top-0 bottom-0 pointer-events-none z-[70] overflow-hidden"
+                                style={{ 
+                                    left: `${stickyWidth}px`,
+                                    right: isExportingPdf ? 'auto' : 0,
+                                    width: isExportingPdf ? `${timelineWidth}px` : undefined
+                                }}
                             >
-                                Cancel
-                            </button>
-                            {modalConfig.type === 'confirm' && (
-                                <button
-                                    onClick={() => { modalConfig.onConfirm?.(); setModalConfig({ ...modalConfig, isOpen: false }); }}
-                                    className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                                {/* Right Side: Y-Axis & Legend */}
+                                <div 
+                                    className="absolute top-0 bottom-0 pointer-events-none z-[80]" 
+                                    style={{ 
+                                        right: 0, 
+                                        width: '80px' 
+                                    }}
                                 >
-                                    Confirm
-                                </button>
+                                    {/* Legend */}
+                                    <div className="absolute bg-white/90 backdrop-blur-sm px-2 py-1.5 rounded shadow-sm border border-gray-200 pointer-events-auto"
+                                         style={{ 
+                                             top: `${HEADER_HEIGHT + 10}px`, 
+                                             right: '10px'
+                                         }}>
+                                        <div className="flex flex-col gap-1.5 text-[10px] font-medium">
+                                            <span className="flex items-center gap-1.5 text-gray-700">
+                                                <span className="inline-block w-3 h-1 bg-blue-600 rounded-full" /> Plan
+                                            </span>
+                                            <span className="flex items-center gap-1.5 text-gray-700">
+                                                <span className="inline-block w-3 h-1 bg-green-600 rounded-full" /> Actual
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Y-Axis Labels */}
+                                    {yLabels.map(v => (
+                                        <div
+                                            key={v}
+                                            className="absolute text-[10px] font-mono font-bold text-gray-500 leading-none bg-white/80 px-1 rounded backdrop-blur-sm"
+                                            style={{ 
+                                                top: `${getY(v) - 5}px`,
+                                                right: '8px'
+                                            }}
+                                        >
+                                            {v}%
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* SVG Chart Area */}
+                                <svg
+                                    className="absolute top-0 overflow-visible"
+                                    style={{
+                                        left: 0,
+                                        width: `${timelineWidth}px`,
+                                        height: `${actualContainerHeight}px`,
+                                        transform: `translateX(${isExportingPdf ? 0 : -scrollLeft}px)`,
+                                        mixBlendMode: 'multiply'
+                                    }}
+                                >
+                                    {/* S-curve Grid lines */}
+                                    {yLabels.map(v => (
+                                        <line
+                                            key={v}
+                                            x1={0}
+                                            y1={getY(v)}
+                                            x2={timelineWidth}
+                                            y2={getY(v)}
+                                            stroke="#94a3b8"
+                                            strokeWidth="1"
+                                            strokeDasharray="4 4"
+                                            opacity="0.5"
+                                        />
+                                    ))}
+
+                                    {/* Plan line */}
+                                    <polyline
+                                        points={planPointsStr}
+                                        fill="none"
+                                        stroke="#2563eb"
+                                        strokeWidth="4"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        opacity="0.85"
+                                    />
+
+                                    {/* Actual line */}
+                                    <polyline
+                                        points={actualPointsStr}
+                                        fill="none"
+                                        stroke="#16a34a"
+                                        strokeWidth="5"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        opacity="0.85"
+                                    />
+                                </svg>
+                            </div>
+                        );
+                    })()}
+                </div>
+
+                {/* TOTAL FOOTER BAR - Restored */}
+                <div className="flex-shrink-0 bg-gray-100 border-t border-gray-300 z-[80] shadow-[0_-2px_10px_rgba(0,0,0,0.05)] font-mono text-xs">
+                    <div className="flex h-10 items-center">
+                        {/* Fixed Left Section */}
+                        <div className="sticky left-0 bg-gray-100 border-r border-gray-300 flex items-center px-4 font-bold text-gray-800 z-20"
+                            style={{ width: `${stickyWidth}px`, minWidth: `${stickyWidth}px` }}>
+                            <div className="flex-1">TOTAL</div>
+
+                            {visibleColumns.cost && (
+                                <div className="w-20 text-right shrink-0 text-blue-800">
+                                    {summaryStats.cost.toLocaleString()}
+                                </div>
+                            )}
+                            {visibleColumns.weight && (
+                                <div className="w-14 text-right shrink-0">
+                                    100%
+                                </div>
+                            )}
+                            {/* Spacer for other cols */}
+                            {visibleColumns.quantity && <div className="w-16 shrink-0" />}
+                            {visibleColumns.dueProcurement && <div className="w-[78px] shrink-0" />}
+                            {visibleColumns.dueMaterialOnSite && <div className="w-[78px] shrink-0" />}
+                            {visibleColumns.dateOfUse && <div className="w-[78px] shrink-0" />}
+                            {visibleColumns.duration && <div className="w-[62px] shrink-0" />}
+                            {visibleColumns.procurementStatus && <div className="w-[96px] shrink-0" />}
+                            {visibleColumns.period && <div className="w-[170px] shrink-0" />}
+                            {visibleColumns.team && (
+                                <div className="shrink-0" style={{ width: `${EMPLOYEE_COL_WIDTH}px`, minWidth: `${EMPLOYEE_COL_WIDTH}px` }} />
+                            )}
+
+                            {visibleColumns.progress && (
+                                <div className="w-20 text-right shrink-0 pr-1 flex items-center justify-end gap-2">
+                                    <span className="text-gray-500 text-[10px]">ACTUAL:</span>
+                                    <span className={`text-sm ${summaryStats.progress >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
+                                        {summaryStats.progress.toFixed(2)}%
+                                    </span>
+                                </div>
                             )}
                         </div>
-                    </div>
-                </div>
-            )}
 
-            {/* Color Menu Popup */}
-            {activeColorMenu && (
-                <>
-                    {/* Backdrop to close menu */}
-                    <div
-                        className="fixed inset-0 z-[998]"
-                        onClick={() => setActiveColorMenu(null)}
-                    />
-                    <div
-                        className="fixed z-[999] bg-white rounded-lg shadow-xl border border-gray-200 p-3 w-40"
-                        style={{ top: activeColorMenu.top, left: activeColorMenu.left }}
-                    >
-                        <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Select Color</div>
-                        <div className="grid grid-cols-4 gap-2">
-                            {[
-                                '#3b82f6', // Blue
-                                '#ef4444', // Red
-                                '#22c55e', // Green
-                                '#eab308', // Yellow
-                                '#a855f7', // Purple
-                                '#ec4899', // Pink
-                                '#f97316', // Orange
-                                '#6b7280'  // Gray
-                            ].map(color => (
-                                <button
-                                    key={color}
-                                    className="w-6 h-6 rounded-full border border-gray-200 hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
-                                    style={{ backgroundColor: color }}
-                                    onClick={() => {
-                                        const newColors = { ...categoryColors, [activeColorMenu.id]: color };
-                                        setCategoryColors(newColors);
-                                        localStorage.setItem('gantt_category_colors', JSON.stringify(newColors));
-                                        setActiveColorMenu(null);
-                                    }}
-                                    title={color}
-                                />
-                            ))}
+                        {/* Timeline Footer (Optional: could show projected bars) */}
+                        <div className="flex-1 bg-gray-50 text-gray-400 flex items-center justify-center italic text-[10px]">
+                            Overall Project Status
                         </div>
                     </div>
-                </>
-            )}
-        </div>
+                </div>
+
+                {/* Global Confirm Modal (optional, if using setModalConfig) */}
+                {modalConfig.isOpen && (
+                    <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">{modalConfig.title}</h3>
+                            <p className="text-gray-600 mb-6">{modalConfig.message}</p>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setModalConfig({ ...modalConfig, isOpen: false })}
+                                    className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                                >
+                                    Cancel
+                                </button>
+                                {modalConfig.type === 'confirm' && (
+                                    <button
+                                        onClick={() => { modalConfig.onConfirm?.(); setModalConfig({ ...modalConfig, isOpen: false }); }}
+                                        className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                                    >
+                                        Confirm
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Color Menu Popup */}
+                {activeColorMenu && (
+                    <>
+                        {/* Backdrop to close menu */}
+                        <div
+                            className="fixed inset-0 z-[998]"
+                            onClick={() => setActiveColorMenu(null)}
+                        />
+                        <div
+                            className="fixed z-[999] bg-white rounded-lg shadow-xl border border-gray-200 p-3 w-40"
+                            style={{ top: activeColorMenu.top, left: activeColorMenu.left }}
+                        >
+                            <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Select Color</div>
+                            <div className="grid grid-cols-4 gap-2">
+                                {[
+                                    '#3b82f6', // Blue
+                                    '#ef4444', // Red
+                                    '#22c55e', // Green
+                                    '#eab308', // Yellow
+                                    '#a855f7', // Purple
+                                    '#ec4899', // Pink
+                                    '#f97316', // Orange
+                                    '#6b7280'  // Gray
+                                ].map(color => (
+                                    <button
+                                        key={color}
+                                        className="w-6 h-6 rounded-full border border-gray-200 hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
+                                        style={{ backgroundColor: color }}
+                                        onClick={() => {
+                                            const newColors = { ...categoryColors, [activeColorMenu.id]: color };
+                                            setCategoryColors(newColors);
+                                            localStorage.setItem('gantt_category_colors', JSON.stringify(newColors));
+                                            setActiveColorMenu(null);
+                                        }}
+                                        title={color}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        </>
     );
 }
-
-

@@ -93,7 +93,7 @@ export default function TimelineHeader({
                             {isProcurementMode && visibleColumns.procurementStatus && <div className={`w-[96px] justify-start pl-2 ${commonHeaderClass}`}>Proc. Status</div>}
                             {visibleColumns.planDuration && <div className={`w-[60px] justify-end px-1 ${commonHeaderClass}`}>Plan (d)</div>}
                             {visibleColumns.actualDuration && <div className={`w-[60px] justify-end px-1 ${commonHeaderClass}`}>Actual (d)</div>}
-                            {visibleColumns.period && <div className={`w-[150px] justify-start pl-2 ${commonHeaderClass}`}>Period</div>}
+                            {visibleColumns.period && <div className={`w-[170px] justify-start pl-2 ${commonHeaderClass}`}>Period</div>}
                             {visibleColumns.team && (
                                 <div
                                     className={`justify-center ${commonHeaderClass}`}

@@ -200,12 +200,20 @@ export default function SCurvePageClient() {
                                         Procurement Plan
                                     </Link>
                                     <Link
+                                        href={`/gantt-scurve/${selectedProjectId}`}
+                                        className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                        onClick={() => setIsViewMenuOpen(false)}
+                                    >
+                                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                                        Gantt + S-Curve
+                                    </Link>
+                                    <Link
                                         href={`/scurve/${selectedProjectId}`}
                                         className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                         onClick={() => setIsViewMenuOpen(false)}
                                     >
                                         <TrendingUp className="w-4 h-4 text-emerald-600" />
-                                        S-Curve Analysis
+                                        S-Curve Summary
                                     </Link>
                                 </div>
                             )}

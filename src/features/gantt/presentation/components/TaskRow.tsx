@@ -568,7 +568,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                         </div>
                     )}
                     {visibleColumns.period && (
-                        <div className={`w-[150px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] font-mono shrink-0 pl-2 whitespace-nowrap ${isGroup ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                        <div className={`w-[170px] h-full flex items-center justify-start border-l border-gray-300/70 text-[10px] font-mono shrink-0 pl-2 whitespace-nowrap ${isGroup ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
                             {displayStartDate && displayEndDate ? (
                                 <>
                                     <span>{formatDateRange(displayStartDate, displayEndDate)}</span>
@@ -761,8 +761,8 @@ export const TaskRow: React.FC<TaskRowProps> = ({
 
                 </div>
 
-                <div className="relative overflow-hidden border-l border-gray-300/90 bg-white" style={{ width: `${timeline.items.length * config.cellWidth}px` }}>
-                    <div className="absolute inset-0 flex pointer-events-none">
+                <div className="relative overflow-hidden border-l border-gray-300/90 bg-white [.is-pdf-exporting_&]:bg-transparent" style={{ width: `${timeline.items.length * config.cellWidth}px` }}>
+                    <div className="absolute inset-0 flex pointer-events-none print-hide-bg">
                         {timeline.items.map((item: any, idx: number) => (
                             <div key={idx} className={`flex-shrink-0 box-border h-full
                                 ${isFourWeekView && viewMode === 'day'

@@ -1,6 +1,8 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
+import { toJpeg } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
 interface UsePdfExportOptions {
     title?: string;
@@ -12,22 +14,14 @@ interface UsePdfExportOptions {
     fitToWidthMinScale?: number;
 }
 
-const defaultOptions: UsePdfExportOptions = {
-    pageSize: 'A3',
-    orientation: 'landscape',
-    margin: '10mm',
-    allowSVG: false,
-    fitToWidth: false,
-    fitToWidthMinScale: 0.25
-};
-
 export function usePdfExport(options: UsePdfExportOptions = {}) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const mergedOptions = { ...defaultOptions, ...options };
+    const [isExporting, setIsExporting] = useState(false);
 
-    const exportToPdf = useCallback(() => {
-        if (!containerRef.current) return;
+    const exportToPdf = useCallback(async () => {
+        if (!containerRef.current || isExporting) return;
 
+        setIsExporting(true);
         const element = containerRef.current;
         const scrollContainer = (element.querySelector('[data-pdf-scroll-container]') || element.querySelector('.overflow-auto')) as HTMLElement | null;
         const originalId = element.id;
@@ -44,163 +38,92 @@ export function usePdfExport(options: UsePdfExportOptions = {}) {
             scrollBarWidth: scrollContainer?.style.getPropertyValue('scrollbar-width')
         };
 
-        // Expand content for full capture
-        element.style.height = 'auto';
-        element.style.overflow = 'visible';
-        if (scrollContainer) {
-            scrollContainer.style.height = 'auto';
-            scrollContainer.style.overflow = 'visible';
-            scrollContainer.style.overflowX = 'visible';
-            scrollContainer.style.overflowY = 'visible';
-            scrollContainer.style.position = 'relative';
-            scrollContainer.style.setProperty('scrollbar-width', 'none');
+        try {
+            // Expand content for full capture
+            element.style.height = 'auto';
+            element.style.overflow = 'visible';
+            if (scrollContainer) {
+                scrollContainer.style.height = 'auto';
+                scrollContainer.style.overflow = 'visible';
+                scrollContainer.style.overflowX = 'visible';
+                scrollContainer.style.overflowY = 'visible';
+                scrollContainer.style.position = 'relative';
+                scrollContainer.style.setProperty('scrollbar-width', 'none');
+            }
+
+            // Force synchronous layout calc to get accurate dimensions after expanding
+            const contentWidth = scrollContainer ? scrollContainer.scrollWidth : element.scrollWidth;
+            const contentHeight = element.scrollHeight;
+
+            // Give the browser a tiny moment to flush DOM updates
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // Generate Canvas image using html-to-image (supports Tailwind v4 lab/oklch colors natively)
+            const dataUrl = await toJpeg(element, {
+                quality: 0.8, // 80% JPEG takes significantly less space and time than PNG
+                pixelRatio: 1.0, // Normal scale prevents memory explosion
+                width: contentWidth,
+                height: contentHeight,
+                backgroundColor: '#ffffff',
+                cacheBust: true,
+                skipFonts: true, // Fixes "Cannot access rules" CORS error on external stylesheets
+                fontEmbedCSS: '',
+                filter: (node) => {
+                    if (node.nodeType !== 1) return true; // keep text nodes
+                    const el = node as HTMLElement;
+                    if (el.tagName === 'BUTTON') return false;
+                    if (el.classList?.contains('print-hide')) return false;
+                    if (el.classList?.contains('print-hide-bg')) return false;
+                    if (el.classList?.contains('column-menu-trigger')) return false;
+                    if (!options.allowSVG && el.tagName?.toLowerCase() === 'svg' && !el.classList?.contains('lucide')) {
+                        return false;
+                    }
+                    return true;
+                }
+            });
+
+            // Convert px to mm: 1px = ~0.264583 mm
+            const pxToMm = 0.264583;
+            // Add a small 10mm padding to the pdf dimensions
+            const pdfWidth = (contentWidth * pxToMm) + 20;
+            const pdfHeight = (contentHeight * pxToMm) + 20;
+
+            const pdf = new jsPDF({
+                orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+                unit: 'mm',
+                format: [pdfWidth, Math.max(pdfHeight, 210)] // Ensure height is at least typical A4 width
+            });
+
+            // Add image centered inside the 10mm margins (FAST compression flag for large pdf generation speed)
+            pdf.addImage(dataUrl, 'JPEG', 10, 10, contentWidth * pxToMm, contentHeight * pxToMm, undefined, 'FAST');
+
+            const filename = `${options.title || 'gantt_export'}_${new Date().getTime()}.pdf`;
+            pdf.save(filename);
+
+        } catch (error) {
+            console.error('PDF export failed:', error);
+        } finally {
+            // Restore original styles
+            element.style.height = originalStyles.height;
+            element.style.overflow = originalStyles.overflow;
+            element.id = originalId;
+
+            if (scrollContainer) {
+                scrollContainer.style.height = originalStyles.scrollHeight || '';
+                scrollContainer.style.overflow = originalStyles.scrollOverflow || '';
+                scrollContainer.style.overflowX = originalStyles.scrollOverflowX || '';
+                scrollContainer.style.overflowY = originalStyles.scrollOverflowY || '';
+                scrollContainer.style.position = originalStyles.scrollPosition || '';
+                scrollContainer.style.setProperty('scrollbar-width', originalStyles.scrollBarWidth || '');
+            }
+            setIsExporting(false);
         }
-
-        // Create print-specific styles
-        const printStyles = document.createElement('style');
-        printStyles.id = 'pdf-export-styles';
-        printStyles.textContent = `
-            @media print {
-                @page {
-                    size: ${mergedOptions.pageSize} ${mergedOptions.orientation};
-                    margin: ${mergedOptions.margin};
-                }
-                
-                /* Hide everything except target container */
-                body * {
-                    visibility: hidden;
-                }
-                
-                #pdf-export-container,
-                #pdf-export-container * {
-                    visibility: visible;
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
-                
-                #pdf-export-container {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    width: 100%;
-                }
-
-                #pdf-export-container [data-pdf-scroll-container] {
-                    overflow: visible !important;
-                    overflow-x: visible !important;
-                    overflow-y: visible !important;
-                }
-
-                /* Remove scrollbar gutter while printing to maximize usable width */
-                #pdf-export-container,
-                #pdf-export-container * {
-                    scrollbar-width: none !important;
-                }
-
-                #pdf-export-container::-webkit-scrollbar,
-                #pdf-export-container *::-webkit-scrollbar {
-                    width: 0 !important;
-                    height: 0 !important;
-                    display: none !important;
-                }
-                
-                ${!mergedOptions.allowSVG ? `
-                /* Hide dependency lines SVG */
-                #pdf-export-container svg {
-                    display: none !important;
-                }
-                ` : ''}
-                
-                /* Hide dependency dots */
-                #pdf-export-container [title*="Link"] {
-                    display: none !important;
-                }
-                
-                /* Ensure background colors are printed */
-                #pdf-export-container [class*="bg-"] {
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                }
-                
-                /* Force inline background colors */
-                #pdf-export-container [style*="background"] {
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                }
-                
-                /* Hide toolbar elements with print-hide class */
-                #pdf-export-container .print-hide,
-                #pdf-export-container button,
-                #pdf-export-container [class*="column-menu"],
-                #pdf-export-container .relative.column-menu-trigger {
-                    display: none !important;
-                }
-                
-                /* Keep elements with print-show class visible */
-                #pdf-export-container .print-show {
-                    display: flex !important;
-                }
-            }
-        `;
-        document.head.appendChild(printStyles);
-
-        // Add ID for print targeting
-        element.id = 'pdf-export-container';
-
-        // Small delay to ensure styles are applied and layout is calculated
-        setTimeout(() => {
-            // Calculate scale for fitToWidth
-            if (mergedOptions.fitToWidth && scrollContainer) {
-                const contentWidth = scrollContainer.scrollWidth;
-                // Approximate printable width (A3 Landscape ~ 1500px, A4 ~ 1000px)
-                const targetWidth = mergedOptions.pageSize === 'A3' ? 1500 : 1000;
-
-                if (contentWidth > targetWidth) {
-                    const rawScale = targetWidth / contentWidth;
-                    // Keep scale readable while still fitting full timeline.
-                    const scale = Math.max(rawScale, mergedOptions.fitToWidthMinScale || 0.25);
-
-                    printStyles.textContent += `
-                        @media print {
-                            #pdf-export-container {
-                                zoom: ${scale};
-                                transform: none !important;
-                                width: ${contentWidth}px !important;
-                                max-width: none !important;
-                            }
-                        }
-                    `;
-                }
-            }
-
-            window.print();
-
-            // Restore original styles after print dialog
-            setTimeout(() => {
-                element.style.height = originalStyles.height;
-                element.style.overflow = originalStyles.overflow;
-                element.id = originalId;
-
-                if (scrollContainer) {
-                    scrollContainer.style.height = originalStyles.scrollHeight || '';
-                    scrollContainer.style.overflow = originalStyles.scrollOverflow || '';
-                    scrollContainer.style.overflowX = originalStyles.scrollOverflowX || '';
-                    scrollContainer.style.overflowY = originalStyles.scrollOverflowY || '';
-                    scrollContainer.style.position = originalStyles.scrollPosition || '';
-                    scrollContainer.style.setProperty('scrollbar-width', originalStyles.scrollBarWidth || '');
-                }
-
-                // Remove print styles
-                const printStyleEl = document.getElementById('pdf-export-styles');
-                if (printStyleEl) printStyleEl.remove();
-            }, 500);
-        }, 500); // Increased delay for safety
-    }, [mergedOptions.pageSize, mergedOptions.orientation, mergedOptions.margin, mergedOptions.allowSVG, mergedOptions.fitToWidth, mergedOptions.fitToWidthMinScale]);
+    }, [options.title, options.allowSVG, isExporting]);
 
     return {
         containerRef,
-        exportToPdf
+        exportToPdf,
+        isPdfExporting: isExporting
     };
 }
 
